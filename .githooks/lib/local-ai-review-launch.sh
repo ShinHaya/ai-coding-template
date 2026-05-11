@@ -40,6 +40,7 @@ export LOCAL_AI_REVIEW_RUNNING=1
 STATUS=$?
 
 if [ -n "$LAUNCH_SERVICE" ]; then
+  # shellcheck disable=SC2016
   nohup /bin/sh -c '
     sleep 1
     /bin/launchctl bootout "$1" >/dev/null 2>&1 || true

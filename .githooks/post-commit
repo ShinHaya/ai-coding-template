@@ -85,7 +85,7 @@ SHORT_SHA=$(git rev-parse --short "$HEAD_SHA" 2>/dev/null || echo unknown)
 
 fallback_nohup() {
   [ -n "${LAUNCH_PLIST:-}" ] && rm -f "$LAUNCH_PLIST"
-  LOCAL_AI_REVIEW_LAUNCH_METHOD=nohup \
+  env LOCAL_AI_REVIEW_LAUNCH_METHOD=nohup \
     nohup "$LAUNCHER" "$REPO_ROOT" "$GITHOOKS_DIR" "$STATE_DIR" "$REVIEWER" "$BRANCH" "$HEAD_SHA" \
     >/dev/null 2>> "$LAUNCH_ERR" </dev/null &
   LAUNCH_PID=$!
@@ -117,6 +117,7 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ] \
   LAUNCH_DOMAIN="gui/$(id -u)"
   LAUNCH_SERVICE="$LAUNCH_DOMAIN/$LABEL"
   LAUNCH_PLIST="$STATE_DIR/.launch.$SHORT_SHA.$$.plist"
+  # shellcheck disable=SC2094
   {
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
     printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'

@@ -235,12 +235,12 @@ cleanup_files+=("$PAYLOAD_FILE")
 {
   cat "$PROMPT_FILE"
   printf '\n\n---\n\n## Context\n\n'
-  printf -- '- branch: `%s`\n' "$BRANCH"
-  printf -- '- commit: `%s`\n' "$COMMIT_SHA"
-  printf -- '- base: `%s` @ `%s`\n' "$LOCAL_AI_REVIEW_BASE_REF" "$MERGE_BASE"
+  printf -- "- branch: \`%s\`\n" "$BRANCH"
+  printf -- "- commit: \`%s\`\n" "$COMMIT_SHA"
+  printf -- "- base: \`%s\` @ \`%s\`\n" "$LOCAL_AI_REVIEW_BASE_REF" "$MERGE_BASE"
   printf -- '- diff bytes: %s\n' "$DIFF_SIZE"
-  printf -- '- diff sha256: `%s`\n\n' "$DIFF_SHA"
-  printf '## Changed files\n\n```\n%s\n```\n\n' "$CHANGED_FILES"
+  printf -- "- diff sha256: \`%s\`\n\n" "$DIFF_SHA"
+  printf "## Changed files\n\n\`\`\`\n%s\n\`\`\`\n\n" "$CHANGED_FILES"
   printf '## Diff\n\n```diff\n'
   cat "$DIFF_FILE"
   printf '\n```\n'
@@ -295,10 +295,10 @@ set_phase "save-output"
 {
   printf '# Local AI review (%s)\n\n' "$REVIEWER"
   printf -- '- timestamp: %s\n' "$(date -u +%FT%TZ)"
-  printf -- '- branch: `%s`\n' "$BRANCH"
-  printf -- '- commit: `%s`\n' "$COMMIT_SHA"
-  printf -- '- merge_base: `%s`\n' "$MERGE_BASE"
-  printf -- '- diff_sha256: `%s`\n' "$DIFF_SHA"
+  printf -- "- branch: \`%s\`\n" "$BRANCH"
+  printf -- "- commit: \`%s\`\n" "$COMMIT_SHA"
+  printf -- "- merge_base: \`%s\`\n" "$MERGE_BASE"
+  printf -- "- diff_sha256: \`%s\`\n" "$DIFF_SHA"
   printf -- '- reviewer_exit: %s\n\n' "$REVIEWER_STATUS"
   printf '## Review\n\n'
   if [ -s "$REVIEWER_OUT" ]; then
