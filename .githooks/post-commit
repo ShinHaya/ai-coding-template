@@ -4,7 +4,7 @@
 # Triggers a background reviewer CLI on the just-created commit.
 # Skips on:
 #   - LOCAL_AI_REVIEW_RUNNING=1 (recursion guard)
-#   - branch not matching codex/* or claude/* prefix
+#   - branch not matching the codex/* prefix
 #   - merge / rebase / cherry-pick in progress
 #   - commit message contains [skip-review]
 #
@@ -53,11 +53,11 @@ case "$HEAD_MSG" in
   *'[skip-review]'*) exit 0 ;;
 esac
 
-# Detect reviewer from branch prefix
+# Detect reviewable Codex-authored branches. Codex-only projects use a
+# separate read-only Codex exec process as the reviewer sub-agent.
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 case "$BRANCH" in
-  ${LOCAL_AI_REVIEW_AUTHOR_PREFIX_CLAUDE}*) REVIEWER="codex" ;;
-  ${LOCAL_AI_REVIEW_AUTHOR_PREFIX_CODEX}*)  REVIEWER="claude" ;;
+  ${LOCAL_AI_REVIEW_AUTHOR_PREFIX_CODEX}*) REVIEWER="codex" ;;
   *) exit 0 ;;
 esac
 

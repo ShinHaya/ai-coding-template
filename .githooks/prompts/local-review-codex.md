@@ -1,9 +1,9 @@
-# Local Code Review (Codex as reviewer)
+# Local Code Review (Codex reviewer sub-agent)
 
-You are reviewing a local branch's diff against the project base. The diff
-itself is included below in the `## Diff` section. Read it and report
-findings in the structure described here. Do **not** modify any files; this
-review is read-only.
+You are the read-only Codex reviewer sub-agent for a Codex-authored branch.
+The diff itself is included below in the `## Diff` section. Read it and
+report findings in the structure described here. Do **not** modify any files;
+this review is read-only.
 
 ## Output format
 
@@ -47,7 +47,7 @@ Prioritize in this order:
 
 - Do not propose changes outside the diff; restrict comments to the diff's
   scope.
-- Do not include `@codex` / `@claude` mentions or any PR / commit boilerplate.
+- Do not include `@codex` mentions or any PR / commit boilerplate.
 - Do not suggest auto-fix workflows; this review is informational.
 - Cite file paths and line numbers based on the diff contents (use the
   post-image line numbers from `+++` hunks).

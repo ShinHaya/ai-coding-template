@@ -40,8 +40,8 @@ if ! command -v shasum >/dev/null 2>&1 && ! command -v sha256sum >/dev/null 2>&1
   missing=$((missing + 1))
 fi
 
-# Reviewer CLIs are required only when their respective branch
-# prefix is in use, so we warn but do not fail the setup.
+# The reviewer CLI is only required when Codex-authored branches are
+# committed, so we warn but do not fail the setup.
 warn_missing_reviewer() {
   local cmd=$1 hint=$2
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -49,7 +49,6 @@ warn_missing_reviewer() {
       "$cmd" "$cmd" "$hint" >&2
   fi
 }
-warn_missing_reviewer claude "https://docs.claude.com/claude-code"
 warn_missing_reviewer codex  "https://github.com/openai/codex"
 
 if [ "$missing" -gt 0 ]; then
@@ -73,4 +72,4 @@ else
 fi
 
 printf '\nhooks installed. local AI review will run on commits made\n'
-printf 'on branches prefixed with claude/ or codex/.\n'
+printf 'on branches prefixed with codex/.\n'

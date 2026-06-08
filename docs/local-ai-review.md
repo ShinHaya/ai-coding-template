@@ -1,7 +1,7 @@
 # Local AI Review
 
-This template includes a Git `post-commit` hook that asks the other AI coding
-tool to review the branch diff.
+This template includes a Git `post-commit` hook that asks a read-only Codex
+reviewer sub-agent to review the branch diff.
 
 ## Purpose
 
@@ -29,12 +29,11 @@ Required commands:
 - `jq`
 - `shasum` on macOS or compatible checksum support
 
-Reviewer CLIs:
+Reviewer CLI:
 
-- `claude` for Claude review
 - `codex` for Codex review
 
-The setup script warns if reviewer CLIs are missing, but does not fail.
+The setup script warns if `codex` is missing, but does not fail.
 
 ## Configuration
 
@@ -42,20 +41,19 @@ Edit `.githooks/config`.
 
 Important settings:
 
-- branch prefixes
+- branch prefix
 - base ref, usually `origin/main`
 - target paths
 - state directory
 - lock timeout
 - reviewer timeout
-- reviewer CLI invocation functions
+- Codex reviewer CLI invocation function
 
 ## Branch Rules
 
 Default reviewer mapping:
 
-- `codex/*` branches trigger Claude review
-- `claude/*` branches trigger Codex review
+- `codex/*` branches trigger Codex review in a separate read-only process
 - other branches are skipped
 
 ## Review Target
@@ -73,13 +71,29 @@ Target paths are configured in `.githooks/config`.
 The hook skips when:
 
 - `LOCAL_AI_REVIEW_RUNNING=1`
-- branch prefix does not match the configured AI prefixes
+- branch prefix does not match the configured Codex prefix
 - the commit is a merge commit
 - rebase or cherry-pick is in progress
 - commit message contains `[skip-review]`
 - target path diff is empty
 - merge-base cannot be resolved
 - the same branch / merge-base / diff hash has already been reviewed
+
+## Review And Fix Loop
+
+The reviewer must start with one of these statuses:
+
+```text
+verdict: PASS | NEEDS_CHANGES | NIT_ONLY
+```
+
+Loop policy:
+
+- `NEEDS_CHANGES`: fix the findings, run relevant checks, and commit again.
+  The post-commit hook reviews the new branch diff.
+- `NIT_ONLY`: stop the required review/fix loop. Nits can be addressed at the
+  author's discretion.
+- `PASS`: stop the loop.
 
 ## Output
 
@@ -93,11 +107,10 @@ This directory should stay out of Git.
 
 Useful files:
 
-- `<timestamp>-claude.md`
 - `<timestamp>-codex.md`
 - `last-run.log`
 - `last-error.log`
-- `last-reviewed.json`
+- `last-reviewed.json`, including the last `verdict`
 
 ## Troubleshooting
 
@@ -111,7 +124,7 @@ Useful files:
 
 ## Optional GitHub Actions Fallback
 
-GitHub Actions based cross-AI review is intentionally outside the default
+GitHub Actions based AI review is intentionally outside the default
 template. If a project adds it, keep these details in a separate optional
 document:
 
@@ -120,4 +133,3 @@ document:
 - recursion prevention
 - branch guards
 - when to use local review vs Actions fallback
-

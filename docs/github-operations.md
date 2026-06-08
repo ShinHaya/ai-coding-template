@@ -26,11 +26,10 @@ git switch -c <agent>/issue-<number>-<short-english-slug>
 Branch examples:
 
 - `codex/issue-123-add-user-settings`
-- `claude/issue-124-fix-login-timeout`
 
 Rules:
 
-- Use `codex/` or `claude/` when work is performed by those tools.
+- Use `codex/` for Codex-authored work.
 - Include the Issue number.
 - Keep the English slug short and descriptive.
 - Record the branch name in the GitHub Issue when useful.
@@ -93,8 +92,11 @@ PR descriptions should include:
 
 AI review convention:
 
-- Codex-authored branches should be reviewed by Claude when possible.
-- Claude-authored branches should be reviewed by Codex when possible.
+- Codex-authored branches are reviewed by a separate read-only Codex reviewer
+  sub-agent through the local Git hook.
+- Fix `NEEDS_CHANGES` findings and commit again to trigger another review.
+- Stop the required review/fix loop once the latest verdict is `NIT_ONLY` or
+  `PASS`.
 - Local AI review output under `state/ai-reviews/` is fast feedback, not a
   replacement for final judgment.
 
@@ -106,14 +108,14 @@ Run:
 bash scripts/setup-hooks.sh
 ```
 
-The hook uses branch prefixes to choose the reviewer:
+The hook uses branch prefixes to decide whether local review should run:
 
-- `codex/*` -> Claude review
-- `claude/*` -> Codex review
+- `codex/*` -> Codex review
+- other branches are skipped
 
 See `docs/local-ai-review.md` for details.
 
-GitHub Actions based cross-AI review is not enabled by default. If a project
+GitHub Actions based AI review is not enabled by default. If a project
 adds it as fallback automation, keep PAT / secret requirements in that
 fallback documentation rather than mixing them into the core workflow.
 
@@ -123,4 +125,3 @@ fallback documentation rather than mixing them into the core workflow.
 - Merge only after required checks pass.
 - Re-run relevant checks after addressing review feedback.
 - Let `Closes #<issue>` close Issues automatically when possible.
-

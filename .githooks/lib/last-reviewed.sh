@@ -9,7 +9,8 @@
 #     "merge_base": "...",
 #     "last_diff_sha256": "...",
 #     "last_reviewed_at": "ISO8601",
-#     "last_reviewer": "claude" | "codex"
+#     "last_reviewer": "codex",
+#     "last_verdict": "PASS" | "NEEDS_CHANGES" | "NIT_ONLY" | "UNKNOWN"
 #   }
 
 last_reviewed_path() {
@@ -33,10 +34,11 @@ last_reviewed_matches() {
   return 0
 }
 
-# last_reviewed_save <branch> <merge_base> <diff_sha> <reviewer>
+# last_reviewed_save <branch> <merge_base> <diff_sha> <reviewer> [verdict]
 # Atomic write via tmpfile + mv (POSIX rename).
 last_reviewed_save() {
   local branch=$1 merge_base=$2 diff_sha=$3 reviewer=$4
+  local verdict=${5:-UNKNOWN}
   local f tmp now
   f=$(last_reviewed_path)
   tmp="${f}.tmp.$$"
@@ -48,7 +50,8 @@ last_reviewed_save() {
     --arg sha "$diff_sha" \
     --arg at "$now" \
     --arg reviewer "$reviewer" \
-    '{branch:$branch, merge_base:$merge_base, last_diff_sha256:$sha, last_reviewed_at:$at, last_reviewer:$reviewer}' \
+    --arg verdict "$verdict" \
+    '{branch:$branch, merge_base:$merge_base, last_diff_sha256:$sha, last_reviewed_at:$at, last_reviewer:$reviewer, last_verdict:$verdict}' \
     > "$tmp"
   mv "$tmp" "$f"
 }

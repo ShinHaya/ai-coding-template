@@ -46,11 +46,12 @@ Run once after cloning:
 bash scripts/setup-hooks.sh
 ```
 
-The Git `post-commit` hook reviews branch diffs with the other AI tool:
+The Git `post-commit` hook reviews branch diffs with a read-only Codex
+reviewer sub-agent:
 
-- `codex/*` branches trigger Claude review
-- `claude/*` branches trigger Codex review
+- `codex/*` branches trigger Codex review
 - review results are written to `state/ai-reviews/`
+- review output starts with `verdict: PASS | NEEDS_CHANGES | NIT_ONLY`
 - `[skip-review]` in a commit message skips review
 
 Configuration lives in `.githooks/config`.
@@ -85,10 +86,12 @@ Configuration lives in `.githooks/config`.
 3. Run the relevant quality gates before committing.
 4. Update documentation when behavior, setup, or operations change.
 5. Do not commit secrets, local state, generated caches, or review artifacts.
+6. After a Codex review, fix `NEEDS_CHANGES` findings and commit again so the
+   hook re-runs; stop the review/fix loop once the verdict is `NIT_ONLY` or
+   `PASS`.
 
 ## Codex Notes
 
-- Do not assume Claude Code hooks run in Codex sessions.
 - Run format / lint / test commands explicitly when needed.
 - Respect sandbox and approval requirements for network, GUI, or destructive operations.
 - Prefer repository-local patterns and documented commands over ad hoc tooling.
@@ -96,4 +99,3 @@ Configuration lives in `.githooks/config`.
 ## Cautions
 
 <!-- Document destructive operations, production risks, data handling, and recovery steps. -->
-

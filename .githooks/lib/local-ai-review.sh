@@ -8,7 +8,7 @@
 #
 # Usage:
 #   LOCAL_AI_REVIEW_RUNNING=1 .githooks/lib/local-ai-review.sh <reviewer> <branch>
-#     reviewer: "claude" | "codex"
+#     reviewer: "codex"
 #     branch:   the current branch name (passed in to avoid races
 #               if the user switches branches mid-run)
 
@@ -29,7 +29,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 
 cd "$REPO_ROOT"
 
-REVIEWER=${1:?reviewer required (claude|codex)}
+REVIEWER=${1:?reviewer required (codex)}
 BRANCH=${2:?branch required}
 # Commit SHA is optional for backward compatibility with manual
 # invocations, but post-commit always passes it so the review is
@@ -57,6 +57,28 @@ sha256_file() {
     fail "missing checksum command: install shasum or sha256sum"
     return 1
   fi
+}
+
+extract_reviewer_verdict() {
+  local file=$1
+  awk '
+    BEGIN { verdict = "UNKNOWN" }
+    /^[[:space:]]*[Vv]erdict:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*[Vv]erdict:[[:space:]]*/, "", value)
+      sub(/[[:space:]].*$/, "", value)
+      if (value == "PASS" || value == "NEEDS_CHANGES" || value == "NIT_ONLY") {
+        verdict = value
+        print verdict
+        exit
+      }
+    }
+    END {
+      if (verdict == "UNKNOWN") {
+        print verdict
+      }
+    }
+  ' "$file"
 }
 
 PHASE="init"
@@ -217,7 +239,6 @@ fi
 
 # --- Build prompt payload ---------------------------------------
 case "$REVIEWER" in
-  claude) PROMPT_FILE="$GITHOOKS_DIR/prompts/local-review-claude.md" ;;
   codex)  PROMPT_FILE="$GITHOOKS_DIR/prompts/local-review-codex.md" ;;
   *) fail "unknown reviewer: $REVIEWER"; exit 1 ;;
 esac
@@ -259,7 +280,6 @@ export LOCAL_AI_REVIEW_RUNNING=1
 
 run_reviewer() {
   case "$REVIEWER" in
-    claude) local_ai_review_run_claude < "$PAYLOAD_FILE" ;;
     codex)  local_ai_review_run_codex < "$PAYLOAD_FILE" ;;
   esac
 }
@@ -286,6 +306,11 @@ wait "$REVIEWER_PID"
 REVIEWER_STATUS=$?
 set -e
 log "reviewer exited pid=$REVIEWER_PID status=$REVIEWER_STATUS"
+REVIEWER_VERDICT="UNKNOWN"
+if [ -s "$REVIEWER_OUT" ]; then
+  REVIEWER_VERDICT=$(extract_reviewer_verdict "$REVIEWER_OUT")
+fi
+log "reviewer verdict=$REVIEWER_VERDICT"
 
 kill "$WATCHDOG_PID" 2>/dev/null || true
 wait "$WATCHDOG_PID" 2>/dev/null || true
@@ -299,7 +324,8 @@ set_phase "save-output"
   printf -- "- commit: \`%s\`\n" "$COMMIT_SHA"
   printf -- "- merge_base: \`%s\`\n" "$MERGE_BASE"
   printf -- "- diff_sha256: \`%s\`\n" "$DIFF_SHA"
-  printf -- '- reviewer_exit: %s\n\n' "$REVIEWER_STATUS"
+  printf -- '- reviewer_exit: %s\n' "$REVIEWER_STATUS"
+  printf -- '- verdict: %s\n\n' "$REVIEWER_VERDICT"
   printf '## Review\n\n'
   if [ -s "$REVIEWER_OUT" ]; then
     cat "$REVIEWER_OUT"
@@ -319,6 +345,6 @@ if [ "$REVIEWER_STATUS" -ne 0 ]; then
 fi
 
 set_phase "save-last-reviewed"
-last_reviewed_save "$BRANCH" "$MERGE_BASE" "$DIFF_SHA" "$REVIEWER"
+last_reviewed_save "$BRANCH" "$MERGE_BASE" "$DIFF_SHA" "$REVIEWER" "$REVIEWER_VERDICT"
 set_phase "done"
-log "done reviewer=$REVIEWER output=$OUTPUT"
+log "done reviewer=$REVIEWER verdict=$REVIEWER_VERDICT output=$OUTPUT"

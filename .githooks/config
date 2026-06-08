@@ -7,10 +7,9 @@
 # per project. Prefer editing this file over changing the lib scripts.
 
 # --- Branch prefix mapping --------------------------------------
-# When the current branch starts with one of these prefixes, the
-# reviewer is the OTHER AI. Branches that match neither prefix are
+# When the current branch starts with this prefix, the hook launches a
+# read-only Codex reviewer sub-agent. Branches that do not match are
 # skipped entirely.
-LOCAL_AI_REVIEW_AUTHOR_PREFIX_CLAUDE="claude/"
 LOCAL_AI_REVIEW_AUTHOR_PREFIX_CODEX="codex/"
 
 # --- Diff base --------------------------------------------------
@@ -35,8 +34,7 @@ LOCAL_AI_REVIEW_TARGET_PATHS=(
   "src/"
   "tests/"
   # "test/"      # Enable for Node.js / Java-style test directories.
-  # ".claude/"   # Enable if shared Claude Code settings are tracked.
-  # ".Codex/"    # Enable if shared Codex settings are tracked.
+  # ".codex/"    # Enable if shared Codex settings are tracked.
 )
 
 # --- State directory --------------------------------------------
@@ -55,32 +53,23 @@ LOCAL_AI_REVIEW_REVIEWER_TIMEOUT_SEC=900
 # but do not abort the review.
 LOCAL_AI_REVIEW_DIFF_WARN_BYTES=$((256 * 1024))
 
-# --- Reviewer CLI invocations -----------------------------------
-# Each function reads the full prompt (prompt template + diff) from
+# --- Reviewer CLI invocation ------------------------------------
+# This function reads the full prompt (prompt template + diff) from
 # stdin and writes the review body to stdout. Errors should go to
 # stderr. Override these to point at different CLIs / subscriptions.
 #
-# Each function MUST `exec` into the reviewer CLI as its final step.
+# This function MUST `exec` into the reviewer CLI as its final step.
 # The orchestrator's watchdog tracks the PID of the subshell that
 # runs the function; if the function called the CLI as a child
 # instead of `exec`ing, killing the tracked PID would only kill
 # the wrapper and leave the actual CLI orphaned.
 
-local_ai_review_run_claude() {
-  local prompt
-  prompt=$(cat)
-  # plan mode is read-only at the model level. We additionally
-  # restrict --tools to read-only operations as defense in depth.
-  exec claude -p "$prompt" \
-    --permission-mode plan \
-    --output-format text \
-    --tools "Read,Grep,Glob"
-}
-
 local_ai_review_run_codex() {
   local prompt
   prompt=$(cat)
-  # read-only sandbox blocks all file edits.
+  # The hook uses a separate read-only Codex exec process as the reviewer
+  # sub-agent. The sandbox blocks file edits, keeping the review phase
+  # observational.
   exec codex exec \
     --sandbox read-only \
     "$prompt"

@@ -1,7 +1,11 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this
-repository.
+This repository is maintained with Codex-only development. `AGENTS.md` is the
+canonical AI coding instruction file.
+
+This file is retained only for projects that have not removed Claude Code
+entry points yet. Keep it in sync with `AGENTS.md` if a downstream project
+chooses to support Claude Code.
 
 ## Project Overview
 
@@ -46,11 +50,12 @@ Run once after cloning:
 bash scripts/setup-hooks.sh
 ```
 
-The Git `post-commit` hook reviews branch diffs with the other AI tool:
+The Git `post-commit` hook reviews branch diffs with a read-only Codex
+reviewer sub-agent:
 
-- `codex/*` branches trigger Claude review
-- `claude/*` branches trigger Codex review
+- `codex/*` branches trigger Codex review
 - review results are written to `state/ai-reviews/`
+- review output starts with `verdict: PASS | NEEDS_CHANGES | NIT_ONLY`
 - `[skip-review]` in a commit message skips review
 
 Configuration lives in `.githooks/config`.
@@ -88,13 +93,9 @@ Configuration lives in `.githooks/config`.
 
 ## Claude Code Notes
 
-<!-- Document Claude Code hooks if this project uses .claude/settings.local.json. -->
-
-- Do not assume Codex-specific automation runs in Claude Code sessions.
-- Run format / lint / test commands explicitly unless local hooks cover them.
-- Keep Claude Code hook behavior documented if enabled.
+- Claude Code is not part of the default development workflow.
+- Prefer Codex and `AGENTS.md` for implementation work in this template.
 
 ## Cautions
 
 <!-- Document destructive operations, production risks, data handling, and recovery steps. -->
-
