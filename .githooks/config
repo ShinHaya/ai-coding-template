@@ -6,11 +6,20 @@
 # After creating a repository from this template, override values here
 # per project. Prefer editing this file over changing the lib scripts.
 
-# --- Branch prefix mapping --------------------------------------
-# When the current branch starts with this prefix, the hook launches a
-# read-only Codex reviewer sub-agent. Branches that do not match are
-# skipped entirely.
+# --- Kill switch ------------------------------------------------
+# Set to 1 to skip the local AI review entirely (post-commit exits
+# early). Use it when the reviewer CLIs are rate-limited or
+# unavailable and every commit would otherwise queue a failing
+# review. Set back to 0 (the default) to restore normal behavior.
+LOCAL_AI_REVIEW_DISABLED=0
+
+# --- Legacy branch prefix mapping -------------------------------
+# Issue branches resolve the reviewer from shared lifecycle metadata.
+# These prefixes remain only for branches created before Issue worktrees.
+LOCAL_AI_REVIEW_AUTHOR_PREFIX_CLAUDE="claude/"
 LOCAL_AI_REVIEW_AUTHOR_PREFIX_CODEX="codex/"
+LOCAL_AI_REVIEW_AUTHOR_PREFIX_GROK="grok/"
+LOCAL_AI_REVIEW_AUTHOR_PREFIX_GEMINI="gemini/"
 
 # --- Diff base --------------------------------------------------
 # Base ref to compute branch-wide diff against. The actual diff
@@ -19,22 +28,52 @@ LOCAL_AI_REVIEW_AUTHOR_PREFIX_CODEX="codex/"
 # latest commit.
 LOCAL_AI_REVIEW_BASE_REF="origin/main"
 
-# --- Review target paths ---------------------------------------
-# Files outside these paths are excluded from the diff fed to the
-# reviewer. Paths are matched as git pathspecs (relative to repo
-# root). Bash 3.2 indexed array.
+# --- Review target paths (code review unit) ---------------------
+# Files under these paths are reviewed as the "code" unit with the
+# reviewer-specific prompt in .githooks/prompts/. Paths are matched
+# as git pathspecs (relative to repo root). Bash 3.2 indexed array.
+#
+# Documentation (README.md, AGENTS.md, CLAUDE.md, docs/) is
+# intentionally excluded here: general documentation is not
+# reviewed. The three canonical documents listed in
+# LOCAL_AI_REVIEW_DOC_UNITS below are reviewed separately with
+# their dedicated review skills.
 LOCAL_AI_REVIEW_TARGET_PATHS=(
-  "README.md"
-  "AGENTS.md"
-  "CLAUDE.md"
-  "docs/"
+  "src/"
+  "tests/"
   "scripts/"
   ".githooks/"
   ".github/"
-  "src/"
-  "tests/"
-  # "test/"      # Enable for Node.js / Java-style test directories.
-  # ".codex/"    # Enable if shared Codex settings are tracked.
+  # Add the paths this project actually ships. Examples:
+  # "app/"          # application source under another name
+  # "test/"         # Node.js / Java-style test directories
+  # "package.json"  # dependency manifest
+  # "tsconfig.json" # build / language config
+  # ".claude/"      # shared Claude Code settings, if tracked
+  # ".codex/"       # shared Codex settings, if tracked
+)
+
+# --- Documentation review units ---------------------------------
+# Documents reviewed with a dedicated review skill instead of the
+# generic code-review prompt. Each entry is
+# "<unit>|<pathspec>|<prompt path>": the unit name (used in log
+# lines, output filenames, and last-reviewed.json), the git pathspec
+# whose diff the unit reviews (a file, or a directory ending in
+# "/"), and the prompt file fed to the reviewer (the skill's
+# SKILL.md, shared by all reviewers; relative to repo root).
+#
+# A commit touching several units triggers one reviewer run per
+# unit, sequentially, in the order listed (after the "code" unit).
+# Other documentation stays out of local AI review.
+#
+# A unit whose document does not exist in this project simply
+# produces an empty diff and is skipped, so leaving an unused entry
+# here is harmless. Remove an entry only when the project will never
+# have that document.
+LOCAL_AI_REVIEW_DOC_UNITS=(
+  "requirements|docs/requirements.md|skills/requirements-review/SKILL.md"
+  "architecture|docs/architecture.md|skills/architecture-review/SKILL.md"
+  "design|docs/design/|skills/design-doc-review/SKILL.md"
 )
 
 # --- State directory --------------------------------------------
@@ -53,24 +92,57 @@ LOCAL_AI_REVIEW_REVIEWER_TIMEOUT_SEC=900
 # but do not abort the review.
 LOCAL_AI_REVIEW_DIFF_WARN_BYTES=$((256 * 1024))
 
-# --- Reviewer CLI invocation ------------------------------------
-# This function reads the full prompt (prompt template + diff) from
+# --- Reviewer CLI invocations -----------------------------------
+# Each function reads the full prompt (prompt template + diff) from
 # stdin and writes the review body to stdout. Errors should go to
 # stderr. Override these to point at different CLIs / subscriptions.
 #
-# This function MUST `exec` into the reviewer CLI as its final step.
+# Each function MUST `exec` into the reviewer CLI as its final step.
 # The orchestrator's watchdog tracks the PID of the subshell that
 # runs the function; if the function called the CLI as a child
 # instead of `exec`ing, killing the tracked PID would only kill
 # the wrapper and leave the actual CLI orphaned.
 
+local_ai_review_run_claude() {
+  local prompt
+  prompt=$(cat)
+  # plan mode is read-only at the model level. We additionally
+  # restrict --tools to read-only operations as defense in depth.
+  exec claude -p "$prompt" \
+    --permission-mode plan \
+    --output-format text \
+    --tools "Read,Grep,Glob" \
+    </dev/null
+}
+
 local_ai_review_run_codex() {
   local prompt
   prompt=$(cat)
-  # The hook uses a separate read-only Codex exec process as the reviewer
-  # sub-agent. The sandbox blocks file edits, keeping the review phase
-  # observational.
+  # read-only sandbox blocks all file edits.
   exec codex exec \
     --sandbox read-only \
-    "$prompt"
+    "$prompt" \
+    </dev/null
+}
+
+local_ai_review_run_grok() {
+  local prompt
+  prompt=$(cat)
+  # plan mode is read-only at the model level. We additionally
+  # restrict --tools to read-only operations as defense in depth.
+  exec grok -p "$prompt" \
+    --permission-mode plan \
+    --output-format plain \
+    --tools "read_file,grep,list_dir" \
+    </dev/null
+}
+
+local_ai_review_run_gemini() {
+  local prompt
+  prompt=$(cat)
+  # --mode plan is read-only at the model level (no file writes).
+  exec agy -p "$prompt" \
+    --mode plan \
+    --output-format text \
+    </dev/null
 }
