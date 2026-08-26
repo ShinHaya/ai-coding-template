@@ -1,4 +1,6 @@
 # Local state and review artifacts
+# (includes state/project-issue-orchestrator.yaml, the runtime copy of
+#  config/project-issue-orchestrator.example.yaml)
 state/
 
 # Secrets and local environment
@@ -16,6 +18,3 @@ dist/
 build/
 coverage/
 
-
-# Orchestrator runtime config (copy of config/project-issue-orchestrator.example.yaml)
-state/project-issue-orchestrator.yaml
