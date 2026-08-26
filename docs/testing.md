@@ -1,49 +1,76 @@
 # Testing
 
+This document owns the **testing strategy**: what to test, at which layer, and
+how aggressively. It is the source of truth for *what* to test; the
+[`writing-good-tests`](../skills/writing-good-tests/SKILL.md) skill is the source
+of truth for *how* to write a test.
+
+Out of scope here: the manual checklist itself (see
+[`manual-test.md`](manual-test.md)) and the canonical command list (see
+[`development.md`](development.md)).
+
 ## 1. Test Strategy
 
-<!-- Describe the balance of unit, integration, e2e, and manual testing. -->
+Tests exist to give confidence that the **risk-carrying behavior** works and
+that the **security non-negotiables hold** — not to maximize a coverage number.
+
+<!-- Record, per layer or module, whether it is heavily tested, lightly tested,
+or deliberately untested, and why. A reviewer should be able to tell whether a
+missing test is an omission or a decision. -->
 
 ## 2. Test Types
 
-| Type | Purpose | Target |
+| Type | Scope | Runs in CI |
 | --- | --- | --- |
-| Unit |  |  |
-| Integration |  |  |
-| E2E |  |  |
-| Manual |  |  |
+| Unit | <!-- pure logic, no I/O --> | |
+| Integration | <!-- module boundaries, real storage --> | |
+| End-to-end | <!-- full user flow --> | |
+| Smoke (shell) | Hook and script behavior, no reviewer CLI | yes |
 
 ## 3. Test Environment
 
-### 3.1 Frameworks
+<!-- Runtime versions, required services, and how to isolate a test run from
+real user state. -->
 
--
+## 4. Test Data And Fixtures
 
-### 3.2 Directory Structure
+- Use **fake data only**. Never commit real personal information in fixtures,
+  screenshots, tests, or docs.
+- Keep fixtures next to the suite that uses them.
 
-```text
-tests/
-```
-
-## 4. Commands
+## 5. Commands
 
 ```bash
-# Run all tests
+# Run the full suite
 
-# Run one test
-
-# Run e2e tests
+# Run one test file
 ```
 
-## 5. Manual Testing
+Repository tooling smoke tests (no reviewer CLI required):
 
-See `docs/manual-test.md`.
+```bash
+bash scripts/test-issue-worktree.sh
+bash scripts/smoke-local-ai-review-branch-mapping.sh
+bash scripts/smoke-local-ai-review-issue-epoch.sh
+bash scripts/smoke-local-ai-review-doc-units.sh
+bash scripts/smoke-local-ai-review-cli-stdin.sh
+bash scripts/smoke-wait-for-local-ai-review.sh
+```
 
-## 6. Test Data
+These launch background processes; redirect their output rather than running
+them attached to a pipe, or the shell will appear to hang after the test has
+already passed.
 
-<!-- Document fixtures, seed data, external accounts, and reset steps. -->
+## 6. Manual Testing
+
+See [`manual-test.md`](manual-test.md). Run the relevant items when a change
+affects behavior the automated suite does not cover.
 
 ## 7. CI
 
-<!-- Document which checks run in CI and which remain local/manual. -->
+<!-- Which suites run on pull requests, which run on main, and what is required
+to merge. -->
 
+## 8. Strategy Decisions
+
+<!-- Record deliberate testing decisions and what would trigger revisiting them. -->
