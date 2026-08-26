@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "name": "<Project name as it appears in GitHub Projects>",
+      "number": 1,
+      "owner": "<org or user login>",
+      "ownerType": "organization",
+      "fields": {
+        "priority": "Priority",
+        "size": "Size",
+        "iteration": "Iteration",
+        "startDate": "Start date",
+        "targetDate": "Target date"
+      },
+      "candidates": [
+        { "name": "<Feature group option>", "keywords": ["keyword", "キーワード"] },
+        { "name": "<Another feature group option>", "keywords": ["keyword"] }
+      ],
+      "requireClassification": true
+    }
+  ]
+}

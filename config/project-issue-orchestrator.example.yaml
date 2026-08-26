@@ -1,0 +1,12 @@
+# Copy this file to state/project-issue-orchestrator.yaml and fill in the values.
+# The runtime copy is ignored by Git and is auto-loaded by the orchestrator and skill.
+project:
+  owner: <org or user login>
+  ownerType: organization
+  name: <Project name as it appears in GitHub Projects>
+
+run:
+  maxParallel: 4
+  releasePolicy: merged
+  unavailableModels: none
+  unavailableAgents: none

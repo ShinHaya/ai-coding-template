@@ -16,3 +16,6 @@ dist/
 build/
 coverage/
 
+
+# Orchestrator runtime config (copy of config/project-issue-orchestrator.example.yaml)
+state/project-issue-orchestrator.yaml
