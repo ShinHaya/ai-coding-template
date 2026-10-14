@@ -60,7 +60,22 @@
 
 <!-- Add data formats, retry strategy, state model, or integration details. -->
 
-## 7. Glossary
+## 7. Out of Scope
+
+<!-- What this project deliberately does not do, so an agent does not build it
+on its own initiative. -->
+
+## 8. Non-Negotiable Requirements
+
+Requirements in this section are **inputs to review, not review targets**. An
+architecture or design is judged on whether it satisfies them; a diff that
+silently weakens one is a blocker.
+
+<!-- State each as a checkable rule, e.g. "personal data is stored encrypted at
+rest and the derived key exists only in memory", "network egress is limited to
+<targets>", "no telemetry, analytics, or crash reporting". -->
+
+## 9. Glossary
 
 | Term | Definition |
 | --- | --- |
