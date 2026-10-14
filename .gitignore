@@ -16,3 +16,6 @@ dist/
 build/
 coverage/
 
+
+# Agent Issue worktrees
+.worktrees/
