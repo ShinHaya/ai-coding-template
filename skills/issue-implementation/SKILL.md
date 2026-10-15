@@ -1,15 +1,7 @@
 ---
 name: issue-implementation
-description: >-
-  Implement exactly one GitHub Issue from an explicit Issue number such as
-  "#139" or "139". Use when the user asks an agent to implement a single Issue
-  or asks to follow the repository Issue Implementation workflow. The workflow
-  refreshes main, creates an issue-named branch, implements and commits the
-  change, then waits for local AI review results (up to two review runs total:
-  an initial review and one confirming re-review after a fix pass), applying
-  a fix pass after each review that has actionable findings and suppressing
-  any review beyond the second, then pushes the branch and opens a PR whose
-  body records the local AI review status, findings, and fixes.
+description: Implement exactly one explicit GitHub Issue in its dedicated worktree, including reviewer-role dispatch, push, and PR creation. Use for a new single-Issue implementation; use handoff-issue when its worktree already exists.
+argument-hint: "[issue-number]"
 ---
 
 # Issue Implementation
@@ -19,7 +11,7 @@ number.
 
 ## Inputs
 
-Accept one Issue number from the user request as the skill argument. Supported
+Accept one Issue number from `$ARGUMENTS` or the user request as the skill argument. Supported
 forms include:
 
 - `#139`
@@ -66,46 +58,67 @@ Follow this workflow:
    the named Issue branch/worktree. During a temporary fetch failure it may use
    an existing local `origin/main`, then local `main`; do not create either one
    with ad hoc Git commands.
-3. Implement the Issue (all edits and commits stay in the Issue worktree).
-4. After committing, check the commit command's own output for
-   `[local-ai-review] queued ...`. If present, wait for that result by
-   running `scripts/wait-for-local-ai-review.sh --unit <unit[,unit...]>` via a
-   single backgrounded shell command (Claude Code: `Bash` with
-   `run_in_background: true`) so its one completion notification replaces
-   manual re-checking — never a chain of short-interval wakeups or ad hoc
-   `ls`/`ps`/`cat` checks against `state/ai-reviews/` in between. Pair it with
-   exactly one long fallback wakeup (comfortably above the script's
-   `--timeout`) as a dead-man's switch only, not a second poll loop. See
-   `docs/local-ai-review.md` §10 for the script's flags and matching
-   mechanics. This workflow allows **up to two local AI review runs in the
-   current handoff epoch** (never open-ended, see `docs/local-ai-review.md`
-   §6): apply a fix pass for
-   the first review's actionable findings and commit it *without*
-   `LOCAL_AI_REVIEW_RUNNING=1`, so the hook reviews that fix commit too (a
-   confirming second review). If that second review still has actionable
-   findings, apply one more fix pass and commit it *with*
-   `LOCAL_AI_REVIEW_RUNNING=1` so the hook does not start a third review — the
-   cap holds regardless of what the second review finds. If the first review
-   already comes back with nothing actionable (`PASS`, or `NIT_ONLY` handled
-   per `docs/local-ai-review.md` §7), no second review is needed.
-   Wait for reviews under **this** worktree's `state/ai-reviews/` only.
-5. When local development is complete, push the branch to GitHub and create a
-   PR. Include `Closes #<issue>` in the PR body so GitHub closes the Issue
-   automatically when the PR is merged. Also include the local AI review status
-   for each run, the actionable findings, and what was fixed. If a review did
-   not run or residual risk remains once the two-review cap is reached, state
-   that clearly.
+3. Implement the Issue, run the applicable checks, and commit the changes (all
+   edits and commits stay in the Issue worktree). Prepare a local test summary.
+4. **Review before push or PR creation.** Dispatch a reviewer role from a
+   **different** verified route using
+   `node scripts/project-issue-dispatch.mjs --role reviewer
+   --execution-mode direct-review --review-pass 1` (plus the route, issue, release
+   policy, and next-milestone flags). The reviewer works read-only in the existing
+   Issue worktree: it reads the Issue acceptance criteria, changed file paths,
+   `git diff origin/main..HEAD`, and the local test summary. No PR exists yet.
+   Explicitly use `--next-milestone` to supply these pre-PR inputs and require an
+   **Issue comment**, overriding the adapter's existing PR-input/comment guidance;
+   do not change the dispatcher or runtime adapters for this workflow.
+   The reviewer posts one Issue comment (`gh issue comment <issue>`) whose first
+   line is `role=reviewer pass=1 verdict=<PASS|NEEDS_REVISION|REJECTED>`.
+   Read the verdict and findings with `gh issue view <issue> --comments`, matching
+   the current review pass and reviewed HEAD rather than an older session's verdict.
+   Include the reviewed HEAD and test summary location in the dispatch milestone
+   and the reviewed HEAD in the verdict comment.
+   - **`PASS`**: review is complete. Proceed to push and PR creation.
+   - **`NEEDS_REVISION`**: apply one implementer fix pass, run applicable checks,
+     and commit. Post a `role=implementer fix-cycle=1` **Issue comment** stating
+     what changed per finding. The fix pass is **not** re-reviewed. Then proceed
+     to push and PR creation.
+   - **`REJECTED`**: stop and report the findings in chat. Do not apply a fix
+     pass, push the branch, or create a PR.
+
+   If no distinct route is available, run on a shared route and record
+   `same-route-reviewer:*` in the PR description. If route discovery fails,
+   state that clearly and proceed without a reviewer pass; record this exception
+   in the PR description.
+5. Push the branch to GitHub and create a PR. Include `Closes #<issue>` in the
+   PR body so GitHub closes the Issue automatically when the PR is merged.
+   Include the reviewer verdict and link to its Issue comment; for
+   `NEEDS_REVISION`, also include findings and the implementer fix summary.
+6. **Monitor CI/CD on the PR.** Initialize a CI fix counter to **0** (separate
+   from the single reviewer fix cycle). Wait for GitHub Actions checks on the
+   latest PR head to finish using `gh pr checks <pr> --watch` or equivalent.
+   If checks have not registered yet, wait for registration; an empty check list
+   is not evidence of success. After each push, verify checks belong to the new
+   head before assessing the result.
+   - When all checks are green, the workflow is complete. Report the PR and
+     verification results; this does not authorize merging.
+   - If any check fails, inspect the failed run for that head with
+     `gh run view <run-id> --log-failed`, identify the cause, and make a scoped
+     fix. Run applicable local checks, commit, and push to the same branch.
+     Increment the counter for each CI fix cycle, then monitor the new head.
+     CI fixes do **not** receive another reviewer pass.
+   - Allow at most **3 CI fix cycles**. If CI/CD still fails after the third
+     fix, stop without a fourth fix. Report in chat the failed check names,
+     log summary, branch name, and remaining branch commit count
+     (`git rev-list --count origin/main..HEAD`) for handoff. Preserve the
+     unmerged branch and PR. If a failure cannot be fixed within Issue scope,
+     report it and stop instead of expanding scope.
 
 ## Boundaries
 
 - Respect repository instructions, sandbox rules, external-network approval
   requirements, and destructive-command safety boundaries.
 - Do not skip the Issue worktree start gate. Do not commit on the primary clone.
-- Do not skip local AI review unless the repository instructions explicitly
-  allow it.
-- Do not run an open-ended local AI review loop. This workflow allows at most
-  two local AI review runs per handoff epoch (an initial review and one confirming
-  re-review after a fix pass) — the second follow-up commit always suppresses
-  further review with `LOCAL_AI_REVIEW_RUNNING=1`.
+- Do not run an open-ended reviewer loop. This workflow allows one review pass
+  and at most one implementer fix cycle; the fix pass is never re-reviewed.
+- Keep CI/CD fixes bounded to three cycles; do not re-review those fixes.
 - Treat PR close as distinct from merge. Close a PR only when the user or the
   repository workflow explicitly asks to close it instead of merging it.

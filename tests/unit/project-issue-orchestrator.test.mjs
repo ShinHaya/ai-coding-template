@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import {
+  buildProjectInfo,
   applyMilestone,
   buildRunPlan,
   buildUsageReport,
@@ -71,6 +72,21 @@ const usage = {
   wallClockMs: 600,
   fetchedBytes: 700,
 };
+
+test("builds organization-owned project info when ownerType is omitted", () => {
+  assert.deepEqual(
+    buildProjectInfo(
+      { projectOwner: "example-org" },
+      { number: 1, fields: { status: "Status" } },
+    ),
+    {
+      number: 1,
+      owner: "example-org",
+      ownerType: "organization",
+      fields: { status: "Status" },
+    },
+  );
+});
 const execFileAsync = promisify(execFile);
 
 test("schedules A then B then C as dependencies complete", async () => {
@@ -134,15 +150,42 @@ test("requires no agent, model, or order assignment fields on items", async () =
   ]);
   assert.equal(items[0].number, 901);
   const plan = buildRunPlan(items, runOptions);
-  assert.equal(plan.runnable[0].route, "issue-implementation");
+  assert.equal(plan.runnable[0].skill, "issue-implementation");
   for (const field of ["primary", "sub", "model", "order"])
     assert.equal(Object.hasOwn(plan.runnable[0], field), false);
+});
+
+test("plans a deterministic execution mode and role program per runnable Issue", async () => {
+  const items = parseProjectItems([
+    {
+      number: 901,
+      title: "Small and low risk",
+      url: "https://example.invalid/issues/901",
+      status: "Ready",
+      size: "S",
+      dependencies: [],
+    },
+    {
+      number: 902,
+      title: "Large",
+      url: "https://example.invalid/issues/902",
+      status: "Ready",
+      size: "XL",
+      dependencies: [],
+    },
+  ]);
+  const plan = buildRunPlan(items, { ...runOptions, maxParallel: 2 });
+  const byNumber = new Map(plan.runnable.map((item) => [item.number, item]));
+  assert.equal(byNumber.get(901).executionMode, "direct-review");
+  assert.deepEqual(byNumber.get(901).roleProgram, ["implementer", "reviewer"]);
+  assert.equal(byNumber.get(902).executionMode, "plan-implement-review");
+  assert.deepEqual(byNumber.get(902).roleProgram, ["planner", "implementer", "reviewer"]);
 });
 
 test("routes an existing Issue worktree through handoff-issue", async () => {
   const items = parseProjectItems((await load("linear.json")).items);
   const plan = buildRunPlan(items, { ...runOptions, completed: [], existingWorktrees: [101] });
-  assert.equal(plan.runnable[0].route, "handoff-issue");
+  assert.equal(plan.runnable[0].skill, "handoff-issue");
 });
 
 test("milestones create resumable state without carrying implementation logs", () => {
@@ -391,7 +434,7 @@ test("does not treat a canonical model identifier as proof for a different reque
   );
 });
 
-test("does not let a mismatched requestedModel fall back to the canonical identifier", () => {
+test("rejects requests matching neither the display name nor the canonical identifier", () => {
   const required = [{ agent: "Grok", model: "Grok 4.5", role: "parent" }];
   assert.throws(
     () =>
@@ -409,6 +452,43 @@ test("does not let a mismatched requestedModel fall back to the canonical identi
       ]),
     /routing-unavailable:parent:Grok:Grok 4\.5/,
   );
+});
+
+test("accepts the exact canonical ID or display name on the same verified capability", async () => {
+  const capability = {
+    agent: "Codex",
+    model: "gpt-6.1-sol",
+    requestedModel: "GPT-6.1-Sol",
+    role: "parent",
+    selector: "codex exec -m gpt-6.1-sol",
+    selectable: true,
+    verifiable: true,
+    timeoutMs: 60_000,
+  };
+  const input = await load("linear.json");
+  for (const model of ["gpt-6.1-sol", "GPT-6.1-Sol"]) {
+    const result = await runOrchestration({
+      ...input,
+      options: {
+        ...runOptions,
+        dryRun: true,
+        parent: { agent: "Codex", model },
+        capabilities: [capability, workerRoute("Claude", "sonnet")],
+      },
+    });
+    assert.deepEqual(result.plan.runnable.map(({ number }) => number), [101]);
+    assert.deepEqual(validateCapabilities([{ agent: "Codex", model, role: "parent" }], [capability]), [capability]);
+    assert.throws(
+      () => validateCapabilities([{ agent: "Codex", model, role: "parent" }], [{ ...capability, verifiable: false }]),
+      /routing-unavailable/,
+    );
+  }
+  for (const model of ["gpt-6-sol", "GPT-6-Sol", "GPT-6.1-SOL"]) {
+    assert.throws(
+      () => validateCapabilities([{ agent: "Codex", model, role: "parent" }], [capability]),
+      /routing-unavailable/,
+    );
+  }
 });
 
 test("requires a canonical model when requestedModel is supplied", () => {
@@ -448,23 +528,32 @@ test("excludes every model of the parent agent from the worker route pool", () =
   ];
   assert.deepEqual(
     selectWorkerRoutes(capabilities, { parentAgent: "Codex" }).map(({ agent, model }) => `${agent}:${model}`),
-    ["Claude:sonnet", "agy:gemini-2.5-pro", "Grok:grok-4"],
+    ["Claude:sonnet", "Grok:grok-4"],
   );
 });
 
-test("treats agy as the Gemini parent runtime alias", () => {
-  const capabilities = [workerRoute("Gemini", "Gemini 3.1 Pro (High)"), workerRoute("Claude", "sonnet")];
+test("parentAsWorker opts the parent agent back into the worker route pool (Issue #589)", () => {
+  const capabilities = [workerRoute("Codex", "gpt-5"), workerRoute("Claude", "sonnet")];
   assert.deepEqual(
-    selectWorkerRoutes(capabilities, { parentAgent: "agy" }).map(({ agent }) => agent),
+    selectWorkerRoutes(capabilities, { parentAgent: "Codex", parentAsWorker: true }).map(({ agent }) => agent),
+    ["Codex", "Claude"],
+  );
+  // The parent is still validated, and run-scoped exclusions still win.
+  assert.throws(() => selectWorkerRoutes(capabilities, { parentAgent: "agy", parentAsWorker: true }), /runtime-retired/);
+  assert.deepEqual(
+    selectWorkerRoutes(capabilities, { parentAgent: "Codex", parentAsWorker: true, unavailableAgents: ["Codex"] })
+      .map(({ agent }) => agent),
     ["Claude"],
   );
-  assert.equal(
-    validateCapabilities(
-      [{ agent: "agy", model: "Gemini 3.1 Pro (High)", role: "parent" }],
-      [{ ...capabilities[0], role: "parent", requestedModel: "Gemini 3.1 Pro (High)" }],
-    )[0].agent,
-    "Gemini",
-  );
+});
+
+test("does not treat retired agy as an eligible Gemini runtime alias", () => {
+  const capabilities = [workerRoute("Gemini", "fixture"), workerRoute("Claude", "sonnet")];
+  assert.throws(() => selectWorkerRoutes(capabilities, { parentAgent: "agy" }), /runtime-retired/);
+  assert.throws(() => validateCapabilities(
+    [{ agent: "agy", model: "fixture", role: "parent" }],
+    [{ ...capabilities[0], role: "parent" }],
+  ), /routing-unavailable/);
 });
 
 test("orchestration degrades to the remaining agents below maxParallel", async () => {
@@ -794,7 +883,12 @@ test("loads and normalizes the orchestrator YAML config", async () => {
     releasePolicy: "merged",
     unavailableModels: [],
     unavailableAgents: ["Codex"],
+    parentAsWorker: false,
   });
+  await writeFile(configPath, "run:\n  maxParallel: 1\n  releasePolicy: merged\n  unavailableModels: none\n  parentAsWorker: true\n");
+  assert.equal((await loadOrchestratorConfig(configPath, { cwd: directory })).parentAsWorker, true);
+  await writeFile(configPath, "run:\n  maxParallel: 1\n  releasePolicy: merged\n  unavailableModels: none\n  parentAsWorker: yes please\n");
+  await assert.rejects(loadOrchestratorConfig(configPath, { cwd: directory }), /config-invalid-parent-as-worker/);
 });
 
 test("rejects malformed and unsafe orchestrator YAML configs", async () => {
@@ -923,7 +1017,7 @@ test("reads dependencies from Blocked by without requesting Issue bodies", async
   const graphql = async (query) => {
     queries.push(query);
     return {
-      user: {
+      organization: {
         projectV2: {
           items: {
             pageInfo: { hasNextPage: false, endCursor: null },
@@ -957,7 +1051,7 @@ test("reads dependencies from Blocked by without requesting Issue bodies", async
 
 test("ignores legacy AI assignee Project fields instead of failing", async () => {
   const graphql = async () => ({
-    user: {
+    organization: {
       projectV2: {
         items: {
           pageInfo: { hasNextPage: false, endCursor: null },
@@ -1021,7 +1115,7 @@ test("the create-issue agent prompt does not request abolished assignment metada
     "utf8",
   );
   assert.doesNotMatch(promptConfig, /primary|sub AI|AI Assignee|Model|Order/i);
-  assert.match(promptConfig, /Priority, Size, and Feature group/);
+  assert.match(promptConfig, /labels and native Issue dependencies/);
 });
 
 test("paginates organization ProjectV2 items and reports fetched bytes", async () => {
@@ -1081,7 +1175,7 @@ test("skips draft, pull request, and non-Issue Project items", async () => {
     content,
   });
   const graphql = async () => ({
-    user: {
+    organization: {
       projectV2: {
         items: {
           pageInfo: { hasNextPage: false, endCursor: null },
@@ -1108,7 +1202,7 @@ test("parses the documented operational Project CLI flags", () => {
       "--project-owner",
       "octo",
       "--owner-type",
-      "user",
+      "organization",
       "--project-name",
       "Visibility",
       "--dry-run",
@@ -1174,6 +1268,7 @@ test("parses the documented operational Project CLI flags", () => {
     },
   );
   assert.equal(parseCliArgs(["--parent-provider", "Claude"]).parentAgent, "Claude");
+  assert.equal(parseCliArgs(["--parent-as-worker"]).parentAsWorker, true);
   assert.throws(() => parseCliArgs(["--mystery"]), /unknown-flag:--mystery/);
 });
 
@@ -1192,7 +1287,7 @@ test("selects exactly one owner/type/name/number Project configuration", () => {
     projects[1],
   );
   assert.throws(
-    () => selectProjectConfig(projects, { name: "Visibility", number: 9 }),
+    () => selectProjectConfig(projects, { name: "Visibility" }),
     /project-config-ambiguous/,
   );
   assert.throws(
@@ -1240,7 +1335,7 @@ test("transitionBacklogToReady performs dry-run without mutations", async () => 
   const graphql = async (query) => {
     calls.push(query);
     return {
-      user: {
+      organization: {
         projectV2: {
           id: "proj-1",
           fields: {
@@ -1292,7 +1387,7 @@ test("transitionBacklogToReady transitions Backlog to Ready and validates readba
     calls.push({ query, variables });
     if (query.includes("GetProject")) {
       return {
-        user: {
+        organization: {
           projectV2: {
             id: "proj-1",
             fields: {
@@ -1351,7 +1446,7 @@ test("transitionBacklogToReady skips Ready items (idempotent)", async () => {
     calls.push(query);
     if (query.includes("GetProject")) {
       return {
-        user: {
+        organization: {
           projectV2: {
             id: "proj-1",
             fields: {
@@ -1397,7 +1492,7 @@ test("transitionBacklogToReady skips Ready items (idempotent)", async () => {
 
 test("transitionBacklogToReady throws on missing Status field", async () => {
   const graphql = async () => ({
-    user: {
+    organization: {
       projectV2: {
         id: "proj-1",
         fields: { nodes: [] },
@@ -1420,7 +1515,7 @@ test("transitionBacklogToReady throws on missing Status field", async () => {
 
 test("transitionBacklogToReady throws on missing Ready option", async () => {
   const graphql = async () => ({
-    user: {
+    organization: {
       projectV2: {
         id: "proj-1",
         fields: {
@@ -1454,7 +1549,7 @@ test("transitionBacklogToReady throws when readback fails to converge", async ()
   const graphql = async (query) => {
     if (query.includes("GetProject")) {
       return {
-        user: {
+        organization: {
           projectV2: {
             id: "proj-1",
             fields: {

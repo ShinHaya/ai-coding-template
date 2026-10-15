@@ -7,16 +7,14 @@ user-invocable: true
 # Requirements Review
 
 Review a diff to `docs/requirements.md` against the five criteria below. The
-criteria mirror `docs/development.md` §9.2 (Requirements Review); if either
-changes, update the other in the same commit.
+criteria are owned by this skill; development links here without duplicating them.
 
 ## Scope
 
 - **Review target: the diff to `docs/requirements.md` only.** Judge unchanged
   text only as context (e.g. a contradiction between new and existing text).
 - Do not review code diffs (`/code-review` owns that) and do not judge the
-  correctness of sample code embedded in the documentation (per
-  `.githooks/prompts/local-review-claude.md`, "Reviewing documentation diffs").
+  correctness of sample code embedded in the documentation.
 
 ## Review criteria (priority order)
 
@@ -45,8 +43,7 @@ that it is satisfied.
 
 ## Output format
 
-Follow the local AI review conventions
-(`.githooks/prompts/local-review-claude.md`):
+Record the review in the Issue/PR using this format:
 
 ```
 verdict: PASS | NEEDS_CHANGES | NIT_ONLY

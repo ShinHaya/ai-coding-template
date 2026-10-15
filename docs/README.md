@@ -14,9 +14,7 @@ index: put detailed decisions in the document that owns the relevant topic.
 | [`development.md`](development.md) | Local setup, commands, project structure, implementation conventions, quality gates, and review criteria (§9). |
 | [`testing.md`](testing.md) | Testing strategy: what to test, at which layer, with which commands. |
 | [`manual-test.md`](manual-test.md) | Manual test checklist. |
-| [`github-operations.md`](github-operations.md) | Issue, branch, worktree, label/priority, commit, pull request, review, and merge workflow rules. §3 also owns the design-doc policy. |
-| [`local-ai-review.md`](local-ai-review.md) | Local AI review hook setup, behavior, review units, budget, outputs, and troubleshooting. |
-| `design/*.md` | Per-Issue detailed design docs produced by Plan mode at the start of implementation (see [`github-operations.md`](github-operations.md) §3). Session-scoped: read only the doc for the Issue being implemented. |
+| [`github-operations.md`](github-operations.md) | Issue, branch, worktree, label/priority, commit, pull request, reviewer-role, and merge workflow rules. §3.1 also owns the plan/design-record policy (plans and designs live in the Issue/PR, not in repository files). |
 
 ## Primary Sources
 

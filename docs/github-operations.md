@@ -5,8 +5,7 @@ naming, Issue workflow, commit conventions, PR descriptions, review
 expectations, and merge policy.
 
 Out of scope here: local setup and quality gate commands (see
-[`development.md`](development.md)) and local AI review hook details (see
-[`local-ai-review.md`](local-ai-review.md)).
+[`development.md`](development.md)).
 
 ## 1. Development Model
 
@@ -19,7 +18,7 @@ Out of scope here: local setup and quality gate commands (see
 - Multiple agents may work in parallel on different Issues, each in that
   Issue's dedicated `git worktree` (see §2).
 - **Primary working tree is human-only (MUST).** The main clone (the primary
-  worktree that owns `.git/`) is for the repository owner: review, merge,
+  worktree that owns `.git/`) is for the Product Owner: review, merge,
   triage, and cross-lane inspection. **Agents must never commit** (or create
   branches, amend, or otherwise perform git writes) on the primary tree.
 - **Agent git writes only in Issue worktrees (MUST).** Agents perform all
@@ -70,14 +69,10 @@ Before any agent creates a branch or edits files for Issue work — including th
 
 `issue-worktree.sh create` verifies the GitHub Issue, attempts to fetch
 `origin/main`, rejects partial or duplicate state, creates the named
-branch/worktree, and starts epoch 1 with a `0/2` review budget. If the fetch is
+branch/worktree, and starts at epoch 1. If the fetch is
 temporarily unavailable, it may use an existing local `origin/main`, then local
 `main` as a last-resort base; creation fails when none is available. Do not
 implement on detached HEAD or check out local `main` in an agent worktree.
-
-Issue verification uses the `gh` CLI. Authenticate once (`gh auth login`)
-before an agent runs the helper; without it, `create` fails closed rather than
-guessing the Issue exists.
 
 ### 2.3 Parallel multi-agent development (worktrees)
 
@@ -96,15 +91,14 @@ force avoidable approval requests.
 Operational notes:
 
 - `core.hooksPath` is set with `git config --local` (stored in the shared common
-  git dir, not per-worktree), so running `scripts/setup-hooks.sh` once enables
-  the local AI review hook in every worktree.
-- `state/ai-reviews/` (the review lock and bookkeeping) lives inside each working
-  tree, so worktrees do not contend for the same review lock. Wait for reviews
-  only under the worktree where the commit was made.
-- Issue lifecycle metadata selects the current reviewer and handoff epoch (see
-  §8 and [`local-ai-review.md`](local-ai-review.md)).
-- Each worktree needs its own dependency installs if you run quality gates
-  there; they are not shared automatically.
+  git dir, not per-worktree), so running `scripts/setup-hooks.sh` once applies
+  commit hooks in every worktree.
+- Claude Code also has a repository `PreToolUse` guard that rejects `git commit`
+  when its working directory is outside `.worktrees/`. It is defense in depth for
+  Claude sessions only; every runtime remains responsible for the start gate.
+- Issue lifecycle metadata tracks the handoff epoch.
+- Each worktree needs its own `node_modules` / tool installs if you run quality
+  gates there; they are not shared automatically.
 - Never repurpose a dirty Issue worktree for another Issue. Never auto-stash,
   reset, clean, or copy inherited WIP during handoff.
 
@@ -112,9 +106,9 @@ Use Issues' `blocked_by` relationships to choose genuinely independent work for
 parallel agents. Shared-file conflicts still require coordination.
 
 If an Issue needs to change a repo-wide shared file that another Issue touches —
-dependency manifests, shared config (`.githooks/config` and the project's
-language/build config), or this workflow doc — coordinate with the other Issue
-first to avoid merge/lockfile conflicts.
+dependency manifests (`package.json` / `package-lock.json`), shared config
+(`tsconfig.json`, `.githooks/config`), or this workflow doc — coordinate with
+the other Issue first to avoid merge/lockfile conflicts.
 
 ### 2.4 Session handoff
 
@@ -126,27 +120,32 @@ bash scripts/issue-worktree.sh handoff <issue> \
   --agent <codex|claude|grok|gemini> --session <non-sensitive-session-id>
 ```
 
-A successful different-session handoff increments `handoff_epoch`, selects the
-new current reviewer, and resets that epoch's review budget to `0/2`. This also
+A successful different-session handoff increments `handoff_epoch`. This also
 applies when the agent name is unchanged after a session limit. Repeating the
-command from the same session is idempotent and does not reset the budget.
+command from the same session is idempotent.
 
-Do not hand off while a Git operation or local AI review is active. Preserve a
-dirty worktree in place; never auto-stash, auto-commit, reset, clean, or copy it.
+Do not hand off while a Git operation is in progress. Preserve a dirty worktree
+in place; never auto-stash, auto-commit, reset, clean, or copy it.
 Record the handoff epoch, agents, redacted session identifiers, HEAD, local
-state, review usage, and next step in the Issue or PR.
+state, and next step in the Issue or PR.
 
 ## 3. Issue Workflow
 
-### 3.0 Project metadata contract
+### 3.0 Issue-only work tracking
 
-New Issues may include the bounded `project-metadata` block documented by the
-`create-issue` Skill. The `issues.opened` workflow uses only the title, body,
-labels, and dependencies for deterministic classification. Missing, invalid,
-ambiguous, or unknown values are logged as reason codes and never cause a new
-Project option to be created. Existing Project items and exact-name iterations
-are reused on rerun. A GraphQL failure exits non-zero so GitHub Actions can
-retry it; logs must not contain the Issue body, credentials, or secrets.
+GitHub Issues are the source of implementation work. Do not fetch, configure or
+update GitHub Projects. Use Issue labels
+for type and Priority, native `Blocked by` relationships for dependencies,
+and Issue/PR milestones for implementation progress. Size and agent/model
+routing are run-time decisions, not fields to write at Issue creation.
+
+Legacy `project-metadata` blocks and the Project utility functions kept in
+`scripts/project-issue-github.mjs` are historical compatibility artifacts; they do
+not authorize Project access. No Project GitHub App or `GH_PROJECT_TOKEN` is
+required for implementation. Start a single Issue with the
+worktree helper (§2), or coordinate explicit Issue numbers through the Issue-only
+orchestrator. Issue bodies remain confined to the responsible worker or isolated
+opt-in triage child.
 
 Use Issues to define the goal, scope, non-scope, implementation direction, and
 acceptance criteria before starting non-trivial work.
@@ -175,30 +174,19 @@ Keep implementation plans in the GitHub Issue for issue-driven work. If a PR
 changes the plan materially, update the Issue or explain the change in the PR
 description.
 
-### 3.1 Issue-level design vs. implementation-session design docs
+### 3.1 Plans and design records
 
-Design lives at two levels, scoped differently:
+Keep both the implementation plan and any detailed design in the GitHub Issue,
+using comments when the detail would obscure its goal and acceptance criteria.
+A planner posts the plan and its revision/reference there; the implementer reads
+the Issue and comments. Reviews and evaluation results belong in the Issue/PR.
+Do not create per-Issue design, spec, plan, report or archive files in the repository.
 
-- **Issue-level (always, in the Issue itself)**: when filing a new Issue, record
-  only the design detail needed to *start* implementation — goal, scope,
-  non-scope, approach, and open questions, per the `implementation-plan.md`
-  template above. This stays in the Issue body/comments, not in a committed
-  file.
-- **Implementation-session-level (`docs/design/`, only when the design is
-  non-trivial)**: when beginning implementation of an Issue, run Plan mode
-  first; if the resulting plan is substantial enough to warrant a detailed
-  design (multiple components, non-obvious interactions, several review
-  rounds expected), write it to `docs/design/<slug>.md` with an `Issue: #<n>`
-  reference near the top. This file is the detailed design record for that
-  Issue's implementation and stays in the repo afterward as history — do not
-  delete it once the Issue is done.
-
-Detailed design docs under `docs/design/` are **session-scoped reading**, not
-background context to preload: when implementing a given Issue, do not read
-other Issues' `docs/design/*.md` files — doing so wastes context window on
-unrelated detail. The one exception is when implementation is stuck on a
-design or debugging problem; in that case, searching past `docs/design/`
-files for applicable prior art is fine.
+Read the documents that own the affected behavior. Promote only durable product,
+architecture, security or setup decisions into their owning general document;
+keep implementation chronology, rejected experiments and review transcripts on
+GitHub. Deleted historical documents remain accessible through Git history.
+Apply `design-doc-review` to substantial Issue design text before implementation.
 
 ## 4. Implementation Size
 
@@ -245,21 +233,31 @@ PR descriptions should include:
 - why it is needed
 - how it was verified
 - remaining risks or skipped checks
+- the reviewer verdict and a link to its comment (see §8)
 
-See §8 for the local AI review convention.
 
-## 8. Local AI Review
+## 8. Review
 
-Setup, branch rules, skip conditions, follow-up policy, cleanup policy, output,
-and troubleshooting live in [`local-ai-review.md`](local-ai-review.md). By
-default, Issue branches resolve their reviewer from lifecycle metadata, and
-legacy `codex/*`, `claude/*`, `grok/*`, and `gemini/*` branches map to the
-matching reviewer when its CLI is available. Local AI review output under
-`state/ai-reviews/` is fast feedback, not a replacement for final judgment.
+Review is performed by an independent **reviewer role**, not a commit hook:
 
-GitHub Actions based AI review is not enabled by default. If a project adds it
-as fallback automation, keep PAT / secret requirements in that fallback
-documentation rather than mixing them into the core workflow.
+- **Single Issue** (`issue-implementation`): before push, the implementer
+  dispatches one reviewer on a different verified route with
+  `node scripts/project-issue-dispatch.mjs --role reviewer --execution-mode
+  direct-review --review-pass 1`. The reviewer works read-only in the Issue
+  worktree and posts one Issue comment whose first line is
+  `role=reviewer pass=1 verdict=<PASS|NEEDS_REVISION|REJECTED>`.
+- **Orchestrated Issues** (`orchestrate-project-issues`): the reviewer posts the
+  same verdict line as a PR comment. `gh pr review` is not used because one
+  account owns both the PR and the review.
+- Review is bounded: one pass per Issue. `NEEDS_REVISION` allows one implementer
+  fix pass (`role=implementer fix-cycle=1` comment) that is not re-reviewed;
+  `REJECTED` stops before push. CI fixes are bounded separately to three cycles
+  and are not re-reviewed.
+- When no distinct route exists, the run records `same-route-reviewer:*`; when
+  route discovery fails, the PR states that no reviewer pass ran.
+
+Reviewer output is fast feedback, not a replacement for the Product Owner's
+merge judgment.
 
 ## 9. Merge Policy
 
@@ -295,14 +293,9 @@ obscure which work is still in flight.
   For a non-squash (true) merge the branch is a `main` ancestor, so plain
   `git branch -d` suffices.
 
-- **Local AI review artifacts**: after the review cycle settles, clean up
-  `state/ai-reviews/` per the cleanup policy in
-  [`local-ai-review.md`](local-ai-review.md) (delete the review `*.md` and
-  logs; keep `last-reviewed.json`).
-
 For Issue worktrees, prefer the guarded command below. It requires GitHub PR
 state `MERGED`, a released lease, a clean tree, no in-progress Git operation,
-no active review lock, and a PR head matching the worktree HEAD:
+and a PR head matching the worktree HEAD:
 
 ```bash
 bash scripts/issue-worktree.sh cleanup <issue> --pr <pr-number>
@@ -319,7 +312,6 @@ of creating a separate learning log without a clear owner.
 Examples:
 
 - A lesson about branch naming belongs in this document.
-- A lesson about local review hooks belongs in [`local-ai-review.md`](local-ai-review.md).
 - A lesson about manual testing belongs in [`manual-test.md`](manual-test.md).
 - A one-off decision for a specific task may stay in that Issue or PR.
 

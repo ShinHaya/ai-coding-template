@@ -1,5 +1,6 @@
+import { isRetiredRuntimeRoute } from "./project-issue-runtime-adapters/shared.mjs";
 import { canonicalizeAgent, isCanonicalDate, OWNER_TYPES } from "./project-issue-assignment.mjs";
-import { determineEligibleModes } from "./project-issue-modes.mjs";
+import { roleProgramForMode, selectExecutionMode } from "./project-issue-roles.mjs";
 
 const RUNNABLE_STATUSES = new Set(["Ready", "Todo", "In Progress"]);
 const RELEASE_POLICIES = new Set(["pr-created", "merged"]);
@@ -34,7 +35,7 @@ function optionalString(value) {
  * capability records, so only identity, status, ordering metadata, and the
  * GitHub-derived dependency closure are validated here.
  */
-export function parseProjectItems(rawItems) {
+export function parseProjectItems(rawItems, { completed = [] } = {}) {
   if (!Array.isArray(rawItems)) throw new Error("items-required");
   const items = rawItems.map((raw) => {
     const number = Number(raw?.number);
@@ -43,6 +44,14 @@ export function parseProjectItems(rawItems) {
     const dependencies = raw.dependencies.map((dependency) => Number(dependency));
     if (dependencies.some((dependency) => !Number.isSafeInteger(dependency) || dependency <= 0))
       throw new Error(`invalid-dependency:${number}`);
+    if (raw.riskCategory !== undefined && !["low", "medium", "high", "critical"].includes(raw.riskCategory))
+      throw new Error(`invalid-risk-category:${number}`);
+    if (raw.changeScopeCount !== undefined && (!Number.isSafeInteger(raw.changeScopeCount) || raw.changeScopeCount < 1))
+      throw new Error(`invalid-change-scope:${number}`);
+    if (raw.modeOverride !== undefined && (!raw.modeOverride ||
+        !Array.isArray(raw.modeOverride.roleProgram) || typeof raw.modeOverride.executionMode !== "string" ||
+        Object.keys(raw.modeOverride).some((k) => !["executionMode", "roleProgram"].includes(k))))
+      throw new Error(`invalid-mode-override:${number}`);
     const startDate = optionalString(raw.startDate);
     if (startDate !== undefined && !isCanonicalDate(startDate))
       throw new Error(`invalid-start-date:${number}`);
@@ -53,12 +62,17 @@ export function parseProjectItems(rawItems) {
       status: requiredString(raw.status, `missing-status:${number}`),
       priority: optionalString(raw.priority),
       size: optionalString(raw.size),
+      ...(raw.riskCategory === undefined ? {} : { riskCategory: raw.riskCategory }),
+      ...(raw.changeScopeCount === undefined ? {} : { changeScopeCount: raw.changeScopeCount }),
+      ...(raw.modeOverride === undefined ? {} : { modeOverride: {
+        executionMode: raw.modeOverride.executionMode, roleProgram: [...raw.modeOverride.roleProgram],
+      } }),
       iteration: optionalString(raw.iteration),
       ...(startDate === undefined ? {} : { startDate }),
       dependencies: Object.freeze([...new Set(dependencies)]),
     });
   });
-  validateProjectItems(items);
+  validateProjectItems(items, { completed });
   return Object.freeze(items);
 }
 
@@ -117,7 +131,8 @@ export function selectProjectItems(rawItems, selectors = {}) {
   };
 }
 
-export function validateProjectItems(items) {
+export function validateProjectItems(items, { completed = [] } = {}) {
+  const completedSet = new Set(completed.map(Number));
   const byNumber = new Map();
   for (const item of items) {
     if (byNumber.has(item.number)) throw new Error(`duplicate-issue:${item.number}`);
@@ -125,7 +140,8 @@ export function validateProjectItems(items) {
   }
   for (const item of items)
     for (const dependency of item.dependencies)
-      if (!byNumber.has(dependency)) throw new Error(`unknown-dependency:${item.number}:${dependency}`);
+      if (!byNumber.has(dependency) && !completedSet.has(dependency))
+        throw new Error(`unknown-dependency:${item.number}:${dependency}`);
 
   const visiting = new Set();
   const visited = new Set();
@@ -133,7 +149,8 @@ export function validateProjectItems(items) {
     if (visiting.has(number)) throw new Error(`dependency-cycle:${number}`);
     if (visited.has(number)) return;
     visiting.add(number);
-    for (const dependency of byNumber.get(number).dependencies) visit(dependency);
+    for (const dependency of byNumber.get(number).dependencies)
+      if (byNumber.has(dependency)) visit(dependency);
     visiting.delete(number);
     visited.add(number);
   };
@@ -164,17 +181,14 @@ export function validateCapabilities(requiredRoutes, capabilities) {
     const match = capabilities.find(
       (candidate) =>
         candidate.agent === requiredAgent &&
-        // `requestedModel` preserves the requested display name while
-        // `model` remains the runtime's canonical model identifier. Keep
-        // accepting the legacy shape where `model` is the requested name,
-        // but never let a canonical ID override a supplied display label.
-        (candidate.requestedModel !== undefined
-          ? candidate.requestedModel === route.model
-          : candidate.model === route.model) &&
+        // Accept either exact identifier from the same verified record;
+        // never infer aliases or substitute a different model.
+        (candidate.model === route.model || candidate.requestedModel === route.model) &&
         candidate.role === route.role,
     );
     if (
       !match ||
+      isRetiredRuntimeRoute(match) ||
       (match.requestedModel !== undefined &&
         (typeof match.requestedModel !== "string" || match.requestedModel.trim() === "")) ||
       typeof match.model !== "string" ||
@@ -194,26 +208,28 @@ export function validateCapabilities(requiredRoutes, capabilities) {
 /**
  * Run-time worker route pool: every role=worker capability record that is
  * well-formed, selectable, verifiable, and not excluded by the parent agent
- * or run-scoped unavailable agent/model lists. The orchestrating agent assigns
+ * (unless `parentAsWorker` opts it in) or run-scoped unavailable
+ * agent/model lists. The orchestrating agent assigns
  * each runnable Issue to one of these routes; the pool never invents a route.
  */
 export function selectWorkerRoutes(
   capabilities,
-  { parentAgent, unavailableAgents = [], unavailableModels = [] } = {},
+  { parentAgent, parentAsWorker = false, unavailableAgents = [], unavailableModels = [] } = {},
 ) {
   if (!Array.isArray(capabilities)) throw new Error("capability-records-required");
   const excludedAgents = new Set(
     unavailableAgents.map((agent) => (canonicalizeAgent(agent) ?? "").toLowerCase()).filter(Boolean),
   );
   if (parentAgent !== undefined) {
+    if (isRetiredRuntimeRoute({ agent: parentAgent })) throw new Error("runtime-retired");
     const canonicalParent = canonicalizeAgent(parentAgent);
     if (!canonicalParent) throw new Error("invalid-parent-agent");
-    excludedAgents.add(canonicalParent.toLowerCase());
+    if (parentAsWorker !== true) excludedAgents.add(canonicalParent.toLowerCase());
   }
   const excludedModels = new Set(unavailableModels);
   const routes = [];
   for (const record of capabilities) {
-    if (record?.role !== "worker") continue;
+    if (record?.role !== "worker" || isRetiredRuntimeRoute(record)) continue;
     if (
       typeof record.agent !== "string" ||
       record.agent.trim() === "" ||
@@ -251,7 +267,7 @@ function reasonFromReadiness(readiness) {
  * emit runnable / blocked / skipped. Parallel cap is applied last.
  */
 export function buildRunPlan(items, run = {}) {
-  validateProjectItems(items);
+  validateProjectItems(items, { completed: run.completed ?? [] });
   if (!Number.isSafeInteger(run.maxParallel) || run.maxParallel <= 0) throw new Error("invalid-max-parallel");
   if (!RELEASE_POLICIES.has(run.releasePolicy)) throw new Error("invalid-release-policy");
   const completed = new Set((run.completed ?? []).map(Number));
@@ -311,16 +327,13 @@ export function buildRunPlan(items, run = {}) {
       continue;
     }
     if (readiness.kind === "runnable") {
-      const eligibleModes = determineEligibleModes({
-        riskCategory: item.riskCategory ?? "low",
-        size: item.size ?? "M",
-        dependencyDepth: item.dependencies ? item.dependencies.length : 0,
-      });
+      const { mode, eligibleModes } = selectExecutionMode(item);
       runnable.push({
         ...item,
         eligibleModes,
-        mode: eligibleModes[0],
-        route: existingWorktrees.has(item.number) ? "handoff-issue" : "issue-implementation",
+        executionMode: mode,
+        roleProgram: roleProgramForMode(mode),
+        skill: existingWorktrees.has(item.number) ? "handoff-issue" : "issue-implementation",
       });
       continue;
     }

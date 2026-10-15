@@ -15,14 +15,14 @@ routes at run time.
    automatically when its recorded CLI path/`--version` no longer matches. Run
    `node scripts/project-issue-capabilities.mjs` directly only when you specifically want an
    unconditional full re-discovery outside the orchestrator (it always probes every adapter fresh).
-2. Adapters are evaluated in fixed order: **Codex → Claude → Grok → Gemini**. Gemini is probed through
-   the Antigravity CLI (`agy`) when present; a bare `gemini` binary is accepted if it is on `PATH`, but
-   never invented.
+2. Adapters are evaluated in fixed order: **Codex → Claude → Grok → Gemini**. Only the independent
+   `gemini` CLI is eligible for Gemini. Antigravity (`agy`) is retired as a worker runtime
+   and is excluded even when installed or present in an old cache/explicit capability file.
 3. Each adapter performs CLI existence and auth/availability checks, then exact model selection. A
    model list alone does not make a route usable: each adapter also runs a **headless execution
-   probe** once (not per model) — spawn the CLI with no TTY attached and a minimal, locally-generated
+   probe** for each exact model/selector pair — spawn the CLI with no TTY attached and a minimal, locally-generated
    tool-use task ("create this exact file with this exact marker"), then check the artifact. Only a
-   route whose adapter actually completed that task under a fixed timeout emits capability records of
+   route whose exact model actually completed that task under a fixed timeout emits capability records of
    shape `{agent, requestedModel, model, role, selector, selectable, verifiable, timeoutMs}`. This
    catches CLIs that answer an auth/model-list check but cannot actually act unattended (e.g. a CLI
    that demands a real TTY, or one whose "print" mode only ever answers in prose and never touches a
@@ -49,7 +49,8 @@ Codex-only file for ordinary orchestration; discovery (fresh or cached) is the s
 
 1. A route is usable only when both `selectable` and `verifiable` are true. `requestedModel` is the
    exact display label when one exists; `model` is the canonical identifier returned or accepted by
-   the runtime. A canonical `model` without an exact `requestedModel` match is not an alias.
+   the runtime. A requested route must exactly match either `model` or `requestedModel` on
+   the same verified record. Do not infer aliases or normalize case.
 2. If the runtime cannot select or prove a requested model machine-readably, that route is
    unavailable (`verifiable: false` / omitted). Do not use a nearby model name and never relabel
    another model.
@@ -68,5 +69,6 @@ the capability record, reusing the exact `selector` and `model`. Use
 or the `dispatchWorker` export. The worker receives only Issue number, agent/model route, release
 policy, and next milestone.
 
-Runtime interfaces differ. Do not hard-code a claim that Claude, Codex, Grok, Gemini, or Antigravity
-is permanently available or unavailable.
+Runtime interfaces differ. Verify availability for each supported CLI and exact model.
+Antigravity is an explicit operator exclusion, not a transient probe failure; it must not be
+reintroduced by cache refresh or handoff.

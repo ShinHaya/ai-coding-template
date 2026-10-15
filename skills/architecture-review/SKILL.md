@@ -7,8 +7,7 @@ user-invocable: true
 # Architecture Review
 
 Review `docs/architecture.md` (or a diff to it) against the five criteria
-below. The criteria mirror `docs/development.md` §9.4 (Architecture Review);
-if either changes, update the other in the same commit.
+below. This skill owns the criteria; development links here without duplication.
 
 Judge everything against **this project's actual context** — its deployment
 shape, user count, and operating environment as stated in
@@ -59,11 +58,9 @@ minor/nit findings touch it), or that it is not applicable and why.
 
 ## Output format
 
-Follow the local AI review conventions
-(`.githooks/prompts/local-review-claude.md`). When reviewing the whole
-document rather than a diff, take only the output format and severity
-conventions from that file — its diff-scope restrictions do not apply, and
-citing repository code that confirms a finding is in scope.
+Record the review in the Issue/PR using this format. When reviewing the whole
+document rather than a diff, citing repository code that confirms a finding is
+in scope.
 
 ```
 verdict: PASS | NEEDS_CHANGES | NIT_ONLY
@@ -88,8 +85,7 @@ chooses) · `minor` (clarity, small gaps) · `nit` (wording, optional). Verdict 
 `blocker`/`major` → `NEEDS_CHANGES`; only `minor`/`nit` → `NIT_ONLY`; no
 findings → `verdict: PASS` with a one-line reason. Cite doc line numbers (or
 post-image diff lines when reviewing a diff). Do not review embedded sample
-code as shipped code, per `.githooks/prompts/local-review-claude.md`,
-"Reviewing documentation diffs".
+code as shipped code.
 
 ## Common mistakes
 
