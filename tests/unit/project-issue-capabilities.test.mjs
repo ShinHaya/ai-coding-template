@@ -90,7 +90,7 @@ test("discovers only verified routes and keeps partial failures isolated", async
   );
   await makeFakeBin(
     bin,
-    "agy",
+    "gemini",
     `
     if (process.argv[2] === "models") {
       process.stderr.write("auth required\\n");
@@ -255,12 +255,9 @@ test("Claude discovers exact models from the project state in .claude.json", asy
       return { code: 127, signal: null, timedOut: false, error: null, stdout: "", stderr: "", pid: null };
     },
     headlessExecProbe: async ({ args }) => {
-      assert.deepEqual(args.slice(0, 4), [
-        "--model",
-        "claude-sonnet-4-5-20250929",
-        "--permission-mode",
-        "bypassPermissions",
-      ]);
+      assert.deepEqual(args.slice(0, 1), ["--model"]);
+      assert.ok(["claude-sonnet-4-5-20250929", "claude-opus-4-5-20251101"].includes(args[1]));
+      assert.deepEqual(args.slice(2, 4), ["--permission-mode", "bypassPermissions"]);
       return { ok: true };
     },
   });
@@ -272,6 +269,60 @@ test("Claude discovers exact models from the project state in .claude.json", asy
     ["claude-sonnet-4-5-20250929", "claude-opus-4-5-20251101"],
   );
   assert.deepEqual(calls, [["auth", "status"]]);
+});
+
+test("Claude verifies each candidate independently and excludes a later model that fails", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "example-cap-claude-per-model-"));
+  const bin = path.join(directory, "bin");
+  await mkdir(bin);
+  const claudePath = await makeFakeBin(bin, "claude", "process.exit(0);");
+  const probedModels = [];
+  const result = await discoverAllCapabilities({
+    env: { ...process.env, PATH: isolatedPath(bin) },
+    pathEnv: isolatedPath(bin),
+    only: ["Claude"],
+    adapters: { Claude: { candidateModels: ["claude-sonnet", "claude-fable"] } },
+    resolveExecutable: async (name) => (name === "claude" ? claudePath : null),
+    runProcess: async () => ({
+      code: 0,
+      signal: null,
+      timedOut: false,
+      error: null,
+      stdout: JSON.stringify({ loggedIn: true }),
+      stderr: "",
+      pid: 1,
+    }),
+    headlessExecProbe: async ({ args }) => {
+      const model = args[args.indexOf("--model") + 1];
+      probedModels.push(model);
+      return model === "claude-sonnet"
+        ? { ok: true }
+        : { ok: false, reason: REASON_CODES.HEADLESS_EXEC_FAILED };
+    },
+  });
+
+  assert.deepEqual(probedModels, ["claude-sonnet", "claude-fable"]);
+  assert.deepEqual(
+    result.capabilities
+      .filter((record) => record.agent === "Claude")
+      .map((record) => [record.model, record.role]),
+    [
+      ["claude-sonnet", "worker"],
+      ["claude-sonnet", "parent"],
+    ],
+  );
+  assert.deepEqual(
+    result.diagnostics.filter((entry) => entry.agent === "Claude"),
+    [
+      { agent: "Claude", status: "ok", model: "claude-sonnet" },
+      {
+        agent: "Claude",
+        status: "failed",
+        reason: REASON_CODES.HEADLESS_EXEC_FAILED,
+        model: "claude-fable",
+      },
+    ],
+  );
 });
 
 test("Claude uses the available-model cache when project usage is absent", async () => {
@@ -473,29 +524,29 @@ test("dispatch timeout kills only the worker process tree", async () => {
   assert.equal(waited.timedOut, true);
 });
 
-test("splitSelector preserves quoted multi-word model ids used by Gemini/agy", () => {
-  assert.deepEqual(splitSelector(`/bin/agy --model "Gemini 3.1 Pro (High)" --print`), [
-    "/bin/agy",
+test("splitSelector preserves quoted multi-word model ids used by Gemini", () => {
+  assert.deepEqual(splitSelector(`/bin/gemini --model "Gemini 3.1 Pro (High)" --print`), [
+    "/bin/gemini",
     "--model",
     "Gemini 3.1 Pro (High)",
     "--print",
   ]);
 });
 
-test("Gemini adapter records agy models with exact display names", async () => {
+test("Gemini adapter records native CLI models with exact display names", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-cap-gemini-"));
   const bin = path.join(directory, "bin");
   await mkdir(bin);
-  const agyPath = path.join(bin, "agy");
-  await makeFakeBin(bin, "agy", "process.exit(0);");
+  const geminiPath = path.join(bin, "gemini");
+  await makeFakeBin(bin, "gemini", "process.exit(0);");
   const result = await discoverAllCapabilities({
     env: { ...process.env, PATH: isolatedPath(bin) },
     pathEnv: isolatedPath(bin),
     timeoutMs: 3_000,
     workerTimeoutMs: 9_000,
-    resolveExecutable: async (name) => (name === "agy" || name === agyPath ? agyPath : null),
+    resolveExecutable: async (name) => (name === "gemini" || name === geminiPath ? geminiPath : null),
     runProcess: async (command, args) => {
-      if (path.basename(command) === "agy" && args[0] === "models") {
+      if (path.basename(command) === "gemini" && args[0] === "models") {
         return {
           code: 0,
           signal: null,
@@ -519,10 +570,7 @@ test("Gemini adapter records agy models with exact display names", async () => {
   ]);
   assert.ok(geminiWorkers[0].selector.includes("--model"));
   assert.ok(geminiWorkers[0].selector.includes("Gemini 3.1 Pro (High)"));
-  // agy's `--print` is a Go string flag consuming the next argv token as the
-  // prompt, so it must be the last selector token (launch appends the prompt
-  // right after it) and skip-permissions/print-timeout must come before it.
-  assert.match(geminiWorkers[0].selector, /--dangerously-skip-permissions --print-timeout 9000ms --print$/);
+  assert.doesNotMatch(geminiWorkers[0].selector, /--print-timeout|--dangerously-skip-permissions/);
 });
 
 test("capabilities CLI module is importable from the repository root", async () => {
@@ -616,42 +664,42 @@ async function makeProbeReactingBin(directory, name, behavior) {
 }
 
 test("runHeadlessExecProbe passes when the CLI writes the exact requested artifact", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-ok-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-ok-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "completes");
   const result = await runHeadlessExecProbe({ cliPath, args: ["--model", "x"], timeoutMs: 10_000 });
   assert.deepEqual(result, { ok: true });
 });
 
 test("runHeadlessExecProbe reports tty-required when the CLI demands a real terminal", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-tty-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-tty-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "ttyRequired");
   const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.TTY_REQUIRED });
 });
 
 test("runHeadlessExecProbe reports non-agentic-print-mode on a clean exit with no artifact", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-print-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-print-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "printOnly");
   const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.NON_AGENTIC_PRINT_MODE });
 });
 
 test("runHeadlessExecProbe reports headless-exec-failed on an unexplained non-zero exit", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-failed-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-failed-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "execFails");
   const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.HEADLESS_EXEC_FAILED });
 });
 
 test("runHeadlessExecProbe reports verification-timeout and cleans up its sandbox", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-timeout-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-timeout-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "hangs");
   const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 300 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.VERIFICATION_TIMEOUT });
 });
 
 test("runHeadlessExecProbe never leaks the generated prompt or marker in its result", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "headless-probe-secrecy-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-secrecy-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "printOnly");
   const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
   assert.deepEqual(Object.keys(result).sort(), ["ok", "reason"]);
@@ -682,7 +730,7 @@ test("a failed headless probe zeroes out an adapter's records instead of trustin
   assert.deepEqual(result.capabilities, []);
   assert.deepEqual(
     result.diagnostics.filter((entry) => entry.agent === "Grok"),
-    [{ agent: "Grok", status: "failed", reason: REASON_CODES.TTY_REQUIRED }],
+    [{ agent: "Grok", status: "failed", reason: REASON_CODES.TTY_REQUIRED, model: "grok-test" }],
   );
 });
 

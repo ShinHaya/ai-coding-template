@@ -4,29 +4,39 @@ Agent Skills shared by every AI coding agent used in this repository. Each
 directory holds a `SKILL.md` (the instruction body) and, where the Codex CLI
 needs an explicit interface, an `agents/openai.yaml`.
 
+Agents discover them through symlinks: `.claude/skills/<name>` (Claude Code)
+and `.agents/skills/<name>` (Codex and other `.agents`-aware runtimes) both
+point at `skills/<name>`. Edit only the files under `skills/`.
+
 ## Workflow skills
 
 | Skill | Use when |
 | --- | --- |
-| [`create-issue`](create-issue/SKILL.md) | Filing or standardizing an Issue, including its bounded `project-metadata` block |
-| [`issue-implementation`](issue-implementation/SKILL.md) | Implementing exactly one Issue end to end: worktree gate, commit, local AI review, PR |
+| [`create-issue`](create-issue/SKILL.md) | Filing or standardizing an Issue with labels and native `Blocked by` dependencies |
+| [`issue-implementation`](issue-implementation/SKILL.md) | Implementing exactly one Issue end to end: worktree gate, commit, independent reviewer pass, PR, CI monitoring |
 | [`handoff-issue`](handoff-issue/SKILL.md) | Resuming an existing Issue worktree after a session limit, interruption, or agent change |
+| [`orchestrate-project-issues`](orchestrate-project-issues/SKILL.md) | Coordinating several Issues: dependency order, run-time agent/model routing, role programs, integration gate |
+
+The workflow skills call these tools:
+
+| Tool | Used by |
+| --- | --- |
+| `scripts/issue-worktree.sh` (`create` / `status` / `handoff` / `release` / `cleanup`) | `issue-implementation`, `handoff-issue` |
+| `scripts/project-issue-dispatch.mjs --role reviewer` | `issue-implementation` (pre-PR review), `orchestrate-project-issues` |
+| `scripts/project-issue-orchestrator.mjs`, `project-issue-capabilities.mjs`, `project-issue-graph.mjs` | `orchestrate-project-issues` |
+| `gh` (Issues, PRs, checks) | all workflow skills |
 
 ## Documentation review skills
 
-These are wired into the local AI review hook through
-`LOCAL_AI_REVIEW_DOC_UNITS` in `.githooks/config`: the hook feeds the skill's
-`SKILL.md` to the reviewer as the prompt for that documentation unit.
+Each skill owns its review criteria; [`docs/development.md`](../docs/development.md)
+§9.2 links here without duplicating them. Record review results in the Issue or
+PR.
 
 | Skill | Review target |
 | --- | --- |
 | [`requirements-review`](requirements-review/SKILL.md) | `docs/requirements.md` diffs |
 | [`architecture-review`](architecture-review/SKILL.md) | `docs/architecture.md` |
-| [`design-doc-review`](design-doc-review/SKILL.md) | `docs/design/*.md` implementation-session design docs |
-
-Each review skill's criteria are mirrored in `docs/development.md` §9 so a
-human reader sees the same standard. When one changes, change the other in the
-same commit.
+| [`design-doc-review`](design-doc-review/SKILL.md) | A detailed design in a GitHub Issue or PR |
 
 ## Craft skills
 
@@ -38,4 +48,9 @@ same commit.
 
 Keep `SKILL.md` self-contained and free of project-specific product detail that
 belongs in `docs/`. A skill that a user should be able to invoke directly needs
-`user-invocable: true` in its frontmatter.
+`user-invocable: true` in its frontmatter. Add the matching symlinks:
+
+```bash
+ln -s ../../skills/<name> .claude/skills/<name>
+ln -s ../../skills/<name> .agents/skills/<name>
+```

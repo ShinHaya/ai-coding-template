@@ -2,8 +2,7 @@
 
 This document owns **local setup, commands, conventions, quality gates, and
 review criteria**. GitHub workflow rules live in
-[`github-operations.md`](github-operations.md); the local AI review hook lives in
-[`local-ai-review.md`](local-ai-review.md).
+[`github-operations.md`](github-operations.md).
 
 ## 1. Development Policy
 
@@ -25,10 +24,13 @@ review criteria**. GitHub workflow rules live in
 ### 2.1 Required Tools
 
 - Git
-- `gh` (GitHub CLI) — required by `scripts/issue-worktree.sh`
-- `jq` — required by the local AI review hook
-- `shellcheck` (recommended) — hook script linting
-- At least one reviewer CLI: `claude`, `codex`, `grok`, or `agy`
+- `gh` (GitHub CLI) — required by `scripts/issue-worktree.sh` and the Issue
+  orchestrator
+- `jq` — required by `scripts/issue-worktree.sh` and the Claude Code guard hook
+- `shellcheck` (recommended) — shell script linting
+- Node.js (version in `.nvmrc`) — only for `scripts/project-issue-*.mjs`
+- Agent CLIs used as workers or reviewers: `codex`, `claude`, `grok`, or
+  `gemini` (only routes verified at run time are used)
 
 <!-- Add the project's language runtime and package manager. -->
 
@@ -36,6 +38,8 @@ review criteria**. GitHub workflow rules live in
 
 ```bash
 # Install dependencies
+# (npm ci is needed only for the project-issue-* orchestration scripts)
+npm ci
 
 # Install the local Git hooks (once per clone)
 bash scripts/setup-hooks.sh
@@ -51,12 +55,13 @@ bash scripts/setup-hooks.sh
 
 ```text
 .
-├── .agents/       # Gemini / Antigravity subagent definitions
-├── .claude/       # Claude Code subagent definitions
-├── .githooks/     # local AI review hook, config, and reviewer prompts
+├── .agents/       # Codex / Gemini skill links and subagent definitions
+├── .claude/       # Claude Code skill links, subagents, and guard hook
+├── .githooks/     # pre-commit quality-gate hook and its config
 ├── .github/       # Issue templates, workflows, Dependabot config
+├── config/        # example orchestrator configuration
 ├── docs/          # documentation (see docs/README.md)
-├── scripts/       # worktree lifecycle, hook setup, review helpers
+├── scripts/       # Issue worktree lifecycle, hook setup, Issue orchestration
 ├── skills/        # repository-local Agent Skills (see skills/README.md)
 ├── src/
 └── tests/
@@ -141,87 +146,67 @@ Code review (human or AI) prioritizes, in this order:
 5. **docs consistency** — documentation that contradicts the diff after the
    change
 
-This mirrors the local AI review's code-review prompts
-(`.githooks/prompts/local-review-*.md`); keep them in sync if any change.
+Apply the same order when acting as the independent reviewer role dispatched
+by [`issue-implementation`](../skills/issue-implementation/SKILL.md) or
+[`orchestrate-project-issues`](../skills/orchestrate-project-issues/SKILL.md)
+(see [`github-operations.md`](github-operations.md) §8).
 
-### 9.2 Requirements Review
+### 9.2 Documentation Reviews
 
-Requirements review targets diffs to [`requirements.md`](requirements.md) and
-checks, in priority order:
+Each documentation review skill owns its criteria; this document only points to
+them so the two cannot drift:
 
-1. **unambiguous** — each changed statement allows exactly one interpretation
-   (no vague qualifiers, undefined terms, or inconsistent naming)
-2. **verifiable** — fulfillment can be objectively checked by test, inspection,
-   or measurement
-3. **consistent** — no contradiction with the rest of `requirements.md` or the
-   product principles in `AGENTS.md`
-4. **failure paths specified** — errors, external blockers, cancellation, and
-   partial completion are stated, not just the happy path
-5. **scope explicit** — out-of-scope items and unstated assumptions are surfaced
+| Review | Target | Skill |
+| --- | --- | --- |
+| Requirements | diffs to [`requirements.md`](requirements.md) | [`requirements-review`](../skills/requirements-review/SKILL.md) |
+| Architecture | [`architecture.md`](architecture.md) or its diff | [`architecture-review`](../skills/architecture-review/SKILL.md) |
+| Issue design | a detailed design in a GitHub Issue or PR | [`design-doc-review`](../skills/design-doc-review/SKILL.md) |
 
-The criteria derive from ISO/IEC/IEEE 29148 requirement quality characteristics,
-prioritized by defect impact. They mirror
-[`../skills/requirements-review/SKILL.md`](../skills/requirements-review/SKILL.md);
-keep the two in sync if either changes. The local AI review hook applies the
-skill automatically to commits touching `docs/requirements.md` (see
-[`local-ai-review.md`](local-ai-review.md) §5).
-
-### 9.3 Design Doc Review
-
-Design doc review targets `docs/design/*.md` implementation-session design docs
-and checks, in priority order:
-
-1. **traceability** — design elements map to requirements / Issue acceptance
-   criteria, with no orphan elements and no uncovered requirements
-2. **contracts and responsibilities** — component responsibilities, API /
-   interface contracts, and the data model are implementable without guessing
-3. **failure handling and state transitions** — error paths, interruption /
-   resume, and state transitions are designed, not just the happy path
-4. **alternatives considered** — rejected options and the rationale for the
-   chosen approach are recorded
-5. **test strategy** — how the design's behavior will be verified is stated
-
-The criteria mirror
-[`../skills/design-doc-review/SKILL.md`](../skills/design-doc-review/SKILL.md).
-
-### 9.4 Architecture Review
-
-Architecture review targets [`architecture.md`](architecture.md) and checks, in
-priority order, judged against this project's actual context (deployment shape,
-user count, operating environment):
-
-1. **requirements and constraint fit** — choices satisfy the non-negotiables
-   (`requirements.md` §8) and prioritized quality attributes, with trade-off
-   points explicit
-2. **system boundaries and data flow** — trust boundaries, where sensitive data
-   may exist in what form, and every egress point
-3. **dependencies** — justified, maintained, license-compatible, security
-   surface understood, stack within the doc's own decisions
-4. **failure modes and data integrity** — durability under crash / interruption,
-   schema versioning / migration, diagnosability
-5. **decision records** — significant decisions captured ADR-style with
-   alternatives, rationale, and reconsideration triggers
-
-A criterion that genuinely does not apply is answered "not applicable" with a
-reason — that is a passing answer, not a gap. The criteria mirror
-[`../skills/architecture-review/SKILL.md`](../skills/architecture-review/SKILL.md).
-
-### 9.5 Local AI Review
-
-See [`local-ai-review.md`](local-ai-review.md) for the hook that applies §9.1–§9.4
-automatically on commit.
+Record review results in the Issue or PR, not in repository files.
 
 ## 10. Issue Implementation
 
-Use the [`issue-implementation`](../skills/issue-implementation/SKILL.md) skill
-for a single Issue, and [`handoff-issue`](../skills/handoff-issue/SKILL.md) to
-resume one. Both defer the worktree rules to
+Use GitHub Issues, labels, and native `Blocked by` relations only; GitHub
+Projects and Project tokens are not used. File Issues with
+[`create-issue`](../skills/create-issue/SKILL.md). Use the
+[`issue-implementation`](../skills/issue-implementation/SKILL.md) skill for a
+single Issue, and [`handoff-issue`](../skills/handoff-issue/SKILL.md) to resume
+one. Both defer the worktree rules to
 [`github-operations.md`](github-operations.md) §2.
+
+Coordinate several Issues with
+[`orchestrate-project-issues`](../skills/orchestrate-project-issues/SKILL.md).
+Its scripts keep the historical `project-issue-` prefix:
+
+```bash
+npm ci
+# Discover verified worker routes (codex / claude / grok / gemini CLIs)
+node scripts/project-issue-capabilities.mjs
+# Plan explicit Issues without writing anything
+node scripts/project-issue-orchestrator.mjs --issues 12,13 --dry-run \
+  --max-parallel 2 --release-policy merged \
+  --parent-agent <agent> --parent-model <model>
+# Orchestration tests
+npm run test:orchestrator
+```
+
+The orchestrator reads the repository from `GITHUB_REPOSITORY` (`owner/name`)
+when set, otherwise from `gh repo view` in the current checkout. Copy
+`config/project-issue-orchestrator.example.yaml` to
+`state/project-issue-orchestrator.yaml` for run defaults.
+
+Development Issue triage is optional and `off` by default. When an operator
+enables it, an isolated child process may send a reviewed Issue title and body
+to the external TypeSafe classification API (`TYPESAFE_API_KEY`); private
+repositories additionally require `run.triage.allowPrivateIssues: true`. Never
+enable it for Issues that contain secrets or personal data.
 
 ## 11. Operational Notes
 
 <!-- Document local state, migrations, generated files, and manual setup. -->
 
-- `state/` holds local-only state (AI review artifacts, runtime config copies)
-  and is git-ignored.
+- `state/` holds local-only state (orchestrator run state, capability cache,
+  runtime config copies, triage evaluation records) and is git-ignored.
+- Issue worktree lifecycle metadata lives under the shared Git common directory
+  (`.git/issue-worktrees/`), not in the worktree.
 - `.worktrees/` holds per-Issue agent worktrees and is git-ignored.

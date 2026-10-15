@@ -111,8 +111,7 @@ Canonical security and privacy decisions live in
 
 Non-negotiable rules for agent sessions:
 
-- Do not commit secrets, local state, real personal data, or AI review
-  artifacts.
+- Do not commit secrets, local state, or real personal data.
 - Do not weaken encryption, log decrypted values, or send raw personal data to
   an AI model.
 - Do not add telemetry, analytics, crash reporting, or network egress beyond the
@@ -138,11 +137,7 @@ Use these documents when present:
 - `docs/manual-test.md`: manual test checklist
 - `docs/dependency-security.md`: dependency / supply-chain detection and triage
 - `docs/github-operations.md`: GitHub workflow rules
-- `docs/local-ai-review.md`: local AI review hook documentation
 - `.github/ISSUE_TEMPLATE/implementation-plan.md`: GitHub Issue implementation plan template
-- `docs/design/*.md`: per-Issue detailed design docs from Plan mode, session-scoped
-  (see [`docs/github-operations.md`](docs/github-operations.md) §3) — read only the
-  one for the Issue being implemented, not the whole directory
 
 Update docs when behavior, setup, commands, architecture, or security
 assumptions change.
@@ -152,12 +147,15 @@ assumptions change.
 Repository-local Agent Skills live under `skills/` (see
 [`skills/README.md`](skills/README.md)):
 
-- `create-issue`: file or standardize an Issue with valid project metadata
-- `issue-implementation`: implement exactly one Issue end to end
+- `create-issue`: file or standardize an Issue with labels and native
+  `Blocked by` dependencies (no GitHub Projects)
+- `issue-implementation`: implement exactly one Issue end to end, including an
+  independent reviewer-role pass before the PR
 - `handoff-issue`: resume an existing Issue worktree after an interruption
+- `orchestrate-project-issues`: coordinate several Issues with dependency order,
+  run-time agent/model routing, and role programs
 - `requirements-review` / `architecture-review` / `design-doc-review`: the
-  documentation review criteria, also used as reviewer prompts by the local AI
-  review hook
+  documentation review criteria (results go in the Issue/PR)
 - `writing-good-tests`: how to write a test (the *what to test* strategy stays
   in [`docs/testing.md`](docs/testing.md))
 
@@ -178,22 +176,23 @@ Quick reminders for agent sessions:
   [`docs/github-operations.md`](docs/github-operations.md) §2.
 - Use `handoff-issue` to resume an existing Issue worktree after a session or
   agent change; never create a duplicate worktree or discard inherited WIP.
-- Do not commit secrets, local state, generated caches, or AI review artifacts.
+- Use GitHub Issues, labels, and native `Blocked by` relations for work
+  tracking. Never query or mutate GitHub Projects.
+- Keep implementation plans, detailed designs, review results, and evaluation
+  evidence in the Issue/PR. Do not create per-Issue document files.
+- Do not commit secrets, local state, or generated caches.
 
-## Local AI Review
+## Review
 
-This repository uses a local Git `post-commit` hook for AI review. Setup, branch
-rules, review units, review budget, skip conditions, and cleanup live in
-[`docs/local-ai-review.md`](docs/local-ai-review.md).
+Review is an independent **reviewer role** on a different verified agent route,
+dispatched with `scripts/project-issue-dispatch.mjs --role reviewer` — one pass
+per Issue, with at most one implementer fix pass that is not re-reviewed. The
+verdict is a GitHub comment headed `role=reviewer pass=<N> verdict=<…>`. See
+[`docs/github-operations.md`](docs/github-operations.md) §8.
 
-- Install once after cloning: `bash scripts/setup-hooks.sh`.
-- The hook is opt-in. Do not assume it has run unless verified in the current
-  environment.
-- Use `[skip-review]` only when
-  [`docs/local-ai-review.md`](docs/local-ai-review.md) allows it.
-- Treat hook output under `state/ai-reviews/` as local state. Do not commit it.
-- Wait for a queued review with `scripts/wait-for-local-ai-review.sh` rather
-  than repeatedly re-checking `state/ai-reviews/`.
+- Install the pre-commit quality-gate hook once after cloning:
+  `bash scripts/setup-hooks.sh`. Do not assume it has run unless verified in
+  the current environment.
 
 ## Quality Gates
 
@@ -295,20 +294,25 @@ architecture, or the safety boundaries defined in the shared sections.
 
 ## Waiting on Backgrounded Work
 
-For the local AI review hook, use `Bash` with `run_in_background: true` running
-`scripts/wait-for-local-ai-review.sh`, which exits the moment its condition is
-met, paired with a single long fallback `ScheduleWakeup` as a dead-man's switch.
-Never use a chain of short-interval wakeups interleaved with manual `ls` / `ps`
-/ `cat` checks: each pair costs a full turn and can re-dump large command output
-into context every time. See [`docs/local-ai-review.md`](docs/local-ai-review.md)
-§10.
+For a dispatched reviewer or worker, or `gh pr checks <pr> --watch`, use `Bash`
+with `run_in_background: true` so its single completion notification replaces
+manual re-checking, paired with at most one long fallback `ScheduleWakeup` as a
+dead-man's switch. Never use a chain of short-interval wakeups interleaved with
+manual `ls` / `ps` / `cat` checks: each pair costs a full turn and can re-dump
+large command output into context every time.
 
-## Claude Code Branch Naming and Local AI Review
+## Claude Code Guard Hook
 
-Issue work uses `issue-<number>-<short-slug>`; the reviewer is resolved from the
-Issue's lifecycle metadata, so no agent prefix is needed. The legacy `claude/`
-prefix still routes to Claude review for branches created before Issue
-worktrees.
+`.claude/settings.json` registers `.claude/hooks/guard-repository.sh` as a
+`PreToolUse` hook that rejects `git commit` outside an Issue worktree. It is
+defense in depth for Claude sessions only; the start gate in
+[`docs/github-operations.md`](docs/github-operations.md) §2 still applies.
+
+## Claude Code Branch Naming
+
+Issue work uses `issue-<number>-<short-slug>`; agent identity is lifecycle
+metadata, so no agent prefix is needed. Pass `--agent claude` (not
+`claude-code`) to `scripts/issue-worktree.sh`.
 
 ## Claude Code Response Expectations
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { normalizeTriageConfig } from "./project-issue-triage-contract.mjs";
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,13 +16,12 @@ import {
   loadOrchestratorConfig,
   mergeOrchestratorConfig,
 } from "./project-issue-config.mjs";
-import { fetchProjectItems, githubGraphql, transitionBacklogToReady } from "./project-issue-github.mjs";
+import { fetchRepositoryIssues } from "./project-issue-github.mjs";
 import {
   applyMilestone,
   buildRunPlan,
   buildUsageReport,
   parseProjectItems,
-  selectProjectConfig,
   selectProjectItems,
   selectWorkerRoutes,
   validateCapabilities,
@@ -71,7 +71,7 @@ export {
  * when a route is lost mid-run (session limit, interruption).
  */
 export async function runOrchestration(input) {
-  const items = parseProjectItems(input?.items);
+  const items = parseProjectItems(input?.items, { completed: input?.state?.completed ?? [] });
   const options = input?.options ?? {};
   const parent = options.parent;
   if (!parent?.agent || !parent?.model) throw new Error("parent-route-required");
@@ -111,12 +111,14 @@ export async function runOrchestration(input) {
   });
   const workerRoutes = selectWorkerRoutes(options.capabilities ?? [], {
     parentAgent: parent.agent,
+    parentAsWorker: parent.asWorker === true,
     unavailableAgents: options.unavailableAgents,
     unavailableModels: options.unavailableModels,
   });
   if (plan.runnable.length && !workerRoutes.length) throw new Error("no-worker-route-available");
   return {
     dryRun,
+    ...(options.triage === undefined ? {} : { triage: normalizeTriageConfig(options.triage) }),
     ...(input.fetchedBytes === undefined ? {} : { fetchedBytes: input.fetchedBytes }),
     plan,
     workerRoutes,
@@ -125,6 +127,15 @@ export async function runOrchestration(input) {
       nextState.usage,
       items.map(({ number }) => number),
     ),
+  };
+}
+
+export function buildProjectInfo(cli, project) {
+  return {
+    number: project.number,
+    owner: cli.projectOwner,
+    ownerType: cli.ownerType ?? "organization",
+    fields: project.fields,
   };
 }
 
@@ -153,6 +164,7 @@ export function parseCliArgs(argv) {
     ["--parent-agent", "parentAgent"],
     ["--parent-model", "parentModel"],
     ["--config", "configPath"],
+    ["--triage", "triage"],
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -168,8 +180,12 @@ export function parseCliArgs(argv) {
       options.skipCapabilityDiscovery = true;
       continue;
     }
+    if (flag === "--parent-as-worker") {
+      options.parentAsWorker = true;
+      continue;
+    }
     // Forces a full re-discovery of every adapter, ignoring any cached
-    // state/project-issue-capabilities.json (Issue #434).
+    // state/project-issue-capabilities.json.
     if (flag === "--refresh") {
       options.refresh = true;
       continue;
@@ -208,21 +224,12 @@ export function parseCliArgs(argv) {
       else options[key].push(key === "existingWorktrees" ? Number(value) : value);
     } else options[key] = ["maxParallel"].includes(key) ? Number(value) : value;
   }
+  if (options.triage !== undefined && !["off", "shadow", "assisted"].includes(options.triage))
+    throw new Error("triage-invalid-mode");
   if (options.ownerType !== undefined && !OWNER_TYPES.has(options.ownerType))
     throw new Error("invalid-owner-type");
   if (options.milestoneJson && options.milestoneFile) throw new Error("milestone-source-conflict");
   return options;
-}
-
-async function loadProjectConfig(cli) {
-  const config = JSON.parse(
-    await fs.readFile(new URL("../config/github-projects.json", import.meta.url), "utf8"),
-  );
-  return selectProjectConfig(config.projects, {
-    owner: cli.projectOwner,
-    ownerType: cli.ownerType ?? "organization",
-    name: cli.projectName,
-  });
 }
 
 async function readInput(cli) {
@@ -246,30 +253,12 @@ async function readInput(cli) {
     const input = JSON.parse(await fs.readFile(cli.inputPath, "utf8"));
     return applySelection(input, selectProjectItems(input.items, selectors));
   }
-  if (cli.projectOwner || cli.projectName) {
-    if (!cli.projectOwner || !cli.projectName) throw new Error("project-owner-and-name-required");
-    const project = await loadProjectConfig(cli);
-    const fetched = await fetchProjectItems({
-      owner: cli.projectOwner,
-      ownerType: cli.ownerType ?? "organization",
-      projectName: cli.projectName,
-      fields: project.fields,
-      graphql: (query, variables) =>
-        githubGraphql(query, variables, {
-          token: process.env.GH_PROJECT_TOKEN || process.env.GITHUB_TOKEN,
-        }),
-    });
-    const selection = selectProjectItems(fetched.items, selectors);
-    const result = applySelection(fetched, selection);
-    // Attach project info for status transition
-    result.projectInfo = {
-      number: project.number,
-      owner: cli.projectOwner,
-      ownerType: cli.ownerType ?? "user",
-      fields: project.fields,
-    };
-    return result;
+  if (cli.issues?.length) {
+    const fetched = await fetchRepositoryIssues({ issues: cli.issues });
+    return applySelection(fetched, selectProjectItems(fetched.items, selectors));
   }
+  if (cli.projectOwner || cli.projectName || cli.priority?.length || cli.iteration?.length || cli.size?.length)
+    throw new Error("issue-numbers-required");
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   if (!chunks.length) throw new Error("input-required");
@@ -292,6 +281,7 @@ async function main() {
   const merged = mergeOrchestratorConfig({
     yaml: yamlConfig,
     cli: {
+      ...(cli.triage === undefined ? {} : { triage: cli.triage }),
       ...(cli.projectOwner === undefined ? {} : { projectOwner: cli.projectOwner }),
       ...(cli.ownerType === undefined ? {} : { ownerType: cli.ownerType }),
       ...(cli.projectName === undefined ? {} : { projectName: cli.projectName }),
@@ -299,10 +289,12 @@ async function main() {
       ...(cli.releasePolicy === undefined ? {} : { releasePolicy: cli.releasePolicy }),
       ...(cli.unavailableModels === undefined ? {} : { unavailableModels: cli.unavailableModels }),
       ...(cli.unavailableAgents === undefined ? {} : { unavailableAgents: cli.unavailableAgents }),
+      ...(cli.parentAsWorker === undefined ? {} : { parentAsWorker: cli.parentAsWorker }),
     },
   });
   const effectiveCli = {
     ...cli,
+    ...(merged.triage === undefined ? {} : { triage: merged.triage }),
     ...(merged.projectOwner === undefined ? {} : { projectOwner: merged.projectOwner }),
     ...(merged.ownerType === undefined ? {} : { ownerType: merged.ownerType }),
     ...(merged.projectName === undefined ? {} : { projectName: merged.projectName }),
@@ -310,49 +302,15 @@ async function main() {
     ...(merged.releasePolicy === undefined ? {} : { releasePolicy: merged.releasePolicy }),
     ...(merged.unavailableModels === undefined ? {} : { unavailableModels: merged.unavailableModels }),
     ...(merged.unavailableAgents === undefined ? {} : { unavailableAgents: merged.unavailableAgents }),
+    ...(merged.parentAsWorker === undefined ? {} : { parentAsWorker: merged.parentAsWorker }),
   };
   const input = await readInput(effectiveCli);
   if (cli.milestoneJson) input.milestone = JSON.parse(cli.milestoneJson);
   if (cli.milestoneFile) input.milestone = JSON.parse(await fs.readFile(cli.milestoneFile, "utf8"));
 
-  // Transition Backlog items to Ready status before orchestration
-  let statusTransitions = [];
-  if (input.projectInfo && input.items && Array.isArray(input.items)) {
-    try {
-      const selectedNumbers = input.items.map((item) => item.number);
-      const transitionResult = await transitionBacklogToReady({
-        projectNumber: input.projectInfo.number,
-        projectOwner: input.projectInfo.owner,
-        selectedIssueNumbers: selectedNumbers,
-        dryRun: Boolean(cli.dryRun),
-        graphql: (query, variables) =>
-          githubGraphql(query, variables, {
-            token: process.env.GH_PROJECT_TOKEN || process.env.GITHUB_TOKEN,
-          }),
-        fields: input.projectInfo.fields,
-      });
-      statusTransitions = transitionResult.transitioned ?? [];
-      // Update items with new status if transitioned
-      if (statusTransitions.length > 0 && !cli.dryRun) {
-        const transitionedSet = new Set(statusTransitions);
-        for (const item of input.items) {
-          if (transitionedSet.has(item.number)) {
-            item.status = "Ready";
-          }
-        }
-      }
-    } catch (error) {
-      if (!error.message.startsWith("project-")) {
-        throw error;
-      }
-      // Non-fatal: if project transition fails, continue with original status
-      console.error(JSON.stringify({ warning: "status-transition-failed", reason: error.message }));
-    }
-  }
-
   // Capability source of truth for the normal CLI path is automatic discovery,
   // which by default reuses state/project-issue-capabilities.json instead of
-  // re-probing every adapter on every run (Issue #434). Explicit sources
+  // re-probing every adapter on every run. Explicit sources
   // (file or pre-baked input.options.capabilities) remain for tests and
   // intentional non-default runs; they skip discovery entirely.
   let capabilities;
@@ -386,6 +344,7 @@ async function main() {
 
   input.options = {
     ...(input.options ?? {}),
+    ...(effectiveCli.triage === undefined ? {} : { triage: effectiveCli.triage }),
     ...(cli.dryRun === undefined ? {} : { dryRun: cli.dryRun }),
     ...(cli.simulateMilestone === undefined ? {} : { simulateMilestone: cli.simulateMilestone }),
     ...(effectiveCli.maxParallel === undefined ? {} : { maxParallel: effectiveCli.maxParallel }),
@@ -400,7 +359,7 @@ async function main() {
     ...(cli.existingWorktrees === undefined ? {} : { existingWorktrees: cli.existingWorktrees }),
     ...(capabilities === undefined ? {} : { capabilities }),
     ...(cli.parentAgent && cli.parentModel
-      ? { parent: { agent: cli.parentAgent, model: cli.parentModel } }
+      ? { parent: { agent: cli.parentAgent, model: cli.parentModel, ...(effectiveCli.parentAsWorker === true ? { asWorker: true } : {}) } }
       : {}),
   };
   if ((cli.parentAgent && !cli.parentModel) || (!cli.parentAgent && cli.parentModel))
@@ -408,7 +367,6 @@ async function main() {
   const result = await runOrchestration(input);
   if (capabilityDiagnostics !== undefined) result.capabilityDiagnostics = capabilityDiagnostics;
   if (capabilityCacheStatus !== undefined) result.capabilityCacheStatus = capabilityCacheStatus;
-  if (statusTransitions.length > 0) result.statusTransitions = statusTransitions;
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

@@ -25,7 +25,7 @@ missing test is an omission or a decision. -->
 | Unit | <!-- pure logic, no I/O --> | |
 | Integration | <!-- module boundaries, real storage --> | |
 | End-to-end | <!-- full user flow --> | |
-| Smoke (shell) | Hook and script behavior, no reviewer CLI | yes |
+| Tooling (shell / Node) | Issue worktree lifecycle and Issue orchestration scripts; no agent CLI required | shell: yes |
 
 ## 3. Test Environment
 
@@ -46,20 +46,13 @@ real user state. -->
 # Run one test file
 ```
 
-Repository tooling smoke tests (no reviewer CLI required):
+Repository tooling tests (no agent CLI or network required; fake CLIs and
+fixtures stand in for them):
 
 ```bash
 bash scripts/test-issue-worktree.sh
-bash scripts/smoke-local-ai-review-branch-mapping.sh
-bash scripts/smoke-local-ai-review-issue-epoch.sh
-bash scripts/smoke-local-ai-review-doc-units.sh
-bash scripts/smoke-local-ai-review-cli-stdin.sh
-bash scripts/smoke-wait-for-local-ai-review.sh
+npm ci && npm run test:orchestrator
 ```
-
-These launch background processes; redirect their output rather than running
-them attached to a pipe, or the shell will appear to hang after the test has
-already passed.
 
 ## 6. Manual Testing
 

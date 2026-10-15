@@ -12,7 +12,7 @@ export const REASON_CODES = Object.freeze({
   MODEL_MISMATCH: "model-mismatch",
   VERIFICATION_TIMEOUT: "verification-timeout",
   PROBE_FAILED: "probe-failed",
-  // Headless execution probe outcomes (Issue #434): a route only becomes
+  // Headless execution probe outcomes: a route only becomes
   // `verifiable: true` after it actually completes a minimal tool-use task
   // with no TTY attached, not merely after auth/model-list checks pass.
   TTY_REQUIRED: "tty-required",
@@ -20,7 +20,7 @@ export const REASON_CODES = Object.freeze({
   HEADLESS_EXEC_FAILED: "headless-exec-failed",
 });
 
-// Bumped from 30s (Issue #434): the Claude CLI's `auth status` / `models`
+// Bumped from 30s: the Claude CLI's `auth status` / `models`
 // probes were observed timing out at 30s and passing at 120s in real runs.
 export const DEFAULT_PROBE_TIMEOUT_MS = 60_000;
 export const DEFAULT_WORKER_TIMEOUT_MS = 3_600_000;
@@ -28,7 +28,7 @@ export const DEFAULT_WORKER_TIMEOUT_MS = 3_600_000;
 // status check), so it gets its own, longer budget.
 export const DEFAULT_HEADLESS_PROBE_TIMEOUT_MS = 120_000;
 
-export const PROBE_SCHEMA_VERSION = 2;
+export const PROBE_SCHEMA_VERSION = 4;
 
 /** Stderr/stdout patterns that indicate the CLI demanded a real TTY/PTY. */
 const TTY_REQUIRED_PATTERN =
@@ -184,6 +184,7 @@ export function runProcess(
 export async function runHeadlessExecProbe({
   cliPath,
   args = [],
+  expectedModel,
   run = runProcess,
   timeoutMs = DEFAULT_HEADLESS_PROBE_TIMEOUT_MS,
   env = process.env,
@@ -206,9 +207,12 @@ export async function runHeadlessExecProbe({
     } catch {
       artifactMatches = false;
     }
-    if (artifactMatches) return { ok: true };
     if (result.timedOut) return { ok: false, reason: REASON_CODES.VERIFICATION_TIMEOUT };
     const combinedOutput = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    if (expectedModel && reportedModels(result).some((model) => model !== expectedModel)) {
+      return { ok: false, reason: REASON_CODES.MODEL_MISMATCH };
+    }
+    if (artifactMatches && result.code === 0) return { ok: true };
     if (TTY_REQUIRED_PATTERN.test(combinedOutput)) return { ok: false, reason: REASON_CODES.TTY_REQUIRED };
     // Exited cleanly but produced no artifact: a print/response-only mode
     // that never actually exercised a tool (observed for `agy --print`).
@@ -216,6 +220,47 @@ export async function runHeadlessExecProbe({
     return { ok: false, reason: REASON_CODES.HEADLESS_EXEC_FAILED };
   } finally {
     await fs.rm(sandboxDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Read explicit CLI model metadata only; never return or persist raw output. */
+export function reportedModels(result) {
+  const models = [];
+  for (const output of [result.stdout, result.stderr]) {
+    for (const line of String(output ?? "").split(/\r?\n/)) {
+      try {
+        const event = JSON.parse(line);
+        if (typeof event?.model === "string") models.push(event.model);
+      } catch {
+        // Codex's CLI session header reports the selected canonical model.
+        const match = line.match(/^model:\s*(\S+)\s*$/);
+        if (match) models.push(match[1]);
+      }
+    }
+  }
+  return models;
+}
+
+/** Verify one exact candidate, isolating failures and exposing closed reasons only. */
+export async function verifyModelCandidate(candidate, ctx = {}) {
+  try {
+    const tokens = splitSelector(candidate.selector);
+    const result = await (ctx.headlessExecProbe ?? runHeadlessExecProbe)({
+      cliPath: tokens[0],
+      args: [...tokens.slice(1), ...(ctx.extraArgs ?? [])],
+      expectedModel: candidate.model,
+      run: ctx.run ?? runProcess,
+      timeoutMs: ctx.headlessProbeTimeoutMs ?? DEFAULT_HEADLESS_PROBE_TIMEOUT_MS,
+      env: ctx.env ?? process.env,
+    });
+    if (result?.ok === true) return { ok: true };
+    return {
+      ok: false,
+      reason: Object.values(REASON_CODES).includes(result?.reason)
+        ? result.reason : REASON_CODES.HEADLESS_EXEC_FAILED,
+    };
+  } catch {
+    return { ok: false, reason: REASON_CODES.PROBE_FAILED };
   }
 }
 
@@ -243,6 +288,16 @@ export function splitSelector(selector) {
   }
   if (!tokens.length) throw new Error("invalid-selector");
   return tokens;
+}
+
+/** Antigravity was withdrawn by the Product Owner; do not revive cached routes. */
+export function isAntigravityCommand(command) {
+  return typeof command === "string" && /^(agy|antigravity)(?:\.exe)?$/i.test(command.split(/[\\/]/).at(-1));
+}
+export function isRetiredRuntimeRoute(route) {
+  if (/^(agy|antigravity)$/i.test(String(route?.agent ?? "").trim())) return true;
+  if (typeof route?.selector !== "string" || !route.selector.trim()) return false;
+  return isAntigravityCommand(splitSelector(route.selector)[0]);
 }
 
 export function capabilityRecord({
@@ -359,8 +414,10 @@ export function spawnWorker(command, args, { timeoutMs, env = process.env, cwd }
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("invalid-timeout-ms");
   }
+  const workerEnv = { ...env };
+  delete workerEnv.TYPESAFE_API_KEY;
   const child = spawn(command, args, {
-    env,
+    env: workerEnv,
     cwd,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
@@ -420,14 +477,88 @@ export function spawnWorker(command, args, { timeoutMs, env = process.env, cwd }
   };
 }
 
-/** Build the minimal worker prompt — Issue number and route labels only. */
-export function buildWorkerPrompt({ issueNumber, agent, model, releasePolicy, nextMilestone }) {
+const NO_STATE_LEAK_RULE =
+  "Do not store credentials, Issue bodies, prompts, diffs, or model response bodies in orchestrator run state.";
+
+/**
+ * Role-specific instructions. Each role runs as its own CLI process, so a
+ * later role cannot see an earlier role's conversation — it reads the Issue,
+ * the worktree, and the diff for itself.
+ */
+function roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }) {
+  if (role === "planner")
+    return [
+      `Plan the implementation of exactly one GitHub Issue. Do not implement it.`,
+      // Deliberately NOT an implementation skill: issue-implementation and
+      // handoff-issue both drive implementation through to a pull request,
+      // which would contradict "do not implement it". The planner sets up the
+      // worktree directly instead.
+      `Set up the Issue worktree with \`bash scripts/issue-worktree.sh ${
+        skill === "handoff-issue" ? "handoff" : "create"
+      } ${issueNumber} ...\` (see docs/github-operations.md §2), then work only inside the path it prints. Do not run issue-implementation or handoff-issue.`,
+      `Post the implementation plan and detailed design as a comment on Issue #${issueNumber} using gh issue comment. Do not create repository design/spec/report files.`,
+      "Report role-complete with role=planner when the plan comment is posted. Return its URL. Do not implement, commit, push, or open a pull request.",
+    ];
+  if (role === "reviewer") {
+    const pass = reviewPass ?? 1;
+    return [
+      `Independently review the changes for this Issue (review pass ${pass}). Do not modify, commit, push, or merge anything.`,
+      `Read-only: work inside the existing Issue worktree (.worktrees/issue-${issueNumber}-*). Do not run issue-implementation, handoff-issue, or any other implementation skill — they commit.`,
+      "Consult the Issue's stated acceptance criteria, the pull request body, the changed file paths, the branch diff, and the test-run summary. You have no access to the implementer's reasoning and must not ask for it.",
+      // The findings have to outlive this process: the next role runs as a
+      // separate CLI and can only read what is on GitHub or on disk.
+      `Post your findings as ONE pull request comment (\`gh pr comment\`), starting with the exact line \`role=reviewer pass=${pass} verdict=<PASS|NEEDS_REVISION|REJECTED>\` followed by the findings list. GitHub's review feature is unavailable because the PR author and the reviewer share one account, so do not use \`gh pr review\`.`,
+      "Then report role-complete with role=reviewer and that same verdict.",
+    ];
+  }
+  if (Number(fixCycle) > 0)
+    return [
+      `Address the reviewer's findings for this Issue (fix cycle ${fixCycle}). A pull request already exists.`,
+      `Use the repository ${skill} skill to resume the existing Issue worktree.`,
+      `Read the findings with \`gh pr view --comments\`: take the newest comment whose first line starts with \`role=reviewer\`.`,
+      "Do NOT create a pull request — push to the same branch so the existing one updates.",
+      `After pushing, post ONE pull request comment starting with the exact line \`role=implementer fix-cycle=${fixCycle}\`, stating per finding what you changed or why you did not.`,
+      "Then report role-complete with role=implementer.",
+    ];
   return [
-    "Implement exactly one GitHub Issue using the repository issue-implementation (or handoff-issue) skill.",
+    `Implement exactly one GitHub Issue using the repository ${skill} skill.`,
+    "Report role-complete with role=implementer once the work is committed, pushed, and the pull request exists.",
+  ];
+}
+
+/**
+ * Build the minimal worker prompt — role, Issue number, and route labels
+ * only. No Issue body, diff, or personal data ever enters the prompt.
+ */
+export function buildWorkerPrompt({
+  issueNumber,
+  agent,
+  model,
+  releasePolicy,
+  nextMilestone,
+  role,
+  skill = "issue-implementation",
+  reviewPass,
+  fixCycle,
+}) {
+  if (!role) {
+    // Single-worker mode: one worker owns the whole Issue, as before roles.
+    return [
+      "Implement exactly one GitHub Issue using the repository issue-implementation (or handoff-issue) skill.",
+      `Issue: #${issueNumber}`,
+      `Assigned route: agent=${agent} model=${model}`,
+      `Release policy: ${releasePolicy}`,
+      `Next milestone: ${nextMilestone}`,
+      NO_STATE_LEAK_RULE,
+    ].join("\n");
+  }
+  return [
+    ...roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }),
     `Issue: #${issueNumber}`,
+    `Role: ${role}`,
     `Assigned route: agent=${agent} model=${model}`,
     `Release policy: ${releasePolicy}`,
     `Next milestone: ${nextMilestone}`,
-    "Do not store credentials, Issue bodies, prompts, diffs, or model response bodies in orchestrator run state.",
+    NO_STATE_LEAK_RULE,
   ].join("\n");
 }

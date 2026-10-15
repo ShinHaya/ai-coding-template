@@ -1,7 +1,10 @@
-# Local state and review artifacts
-# (includes state/project-issue-orchestrator.yaml, the runtime copy of
-#  config/project-issue-orchestrator.example.yaml)
+# Local state: orchestrator run state, capability cache, triage evaluation,
+# and state/project-issue-orchestrator.yaml (the runtime copy of
+# config/project-issue-orchestrator.example.yaml)
 state/
+
+# Personal Claude Code settings
+.claude/settings.local.json
 
 # Secrets and local environment
 .env

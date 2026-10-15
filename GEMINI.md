@@ -112,8 +112,7 @@ Canonical security and privacy decisions live in
 
 Non-negotiable rules for agent sessions:
 
-- Do not commit secrets, local state, real personal data, or AI review
-  artifacts.
+- Do not commit secrets, local state, or real personal data.
 - Do not weaken encryption, log decrypted values, or send raw personal data to
   an AI model.
 - Do not add telemetry, analytics, crash reporting, or network egress beyond the
@@ -139,11 +138,7 @@ Use these documents when present:
 - `docs/manual-test.md`: manual test checklist
 - `docs/dependency-security.md`: dependency / supply-chain detection and triage
 - `docs/github-operations.md`: GitHub workflow rules
-- `docs/local-ai-review.md`: local AI review hook documentation
 - `.github/ISSUE_TEMPLATE/implementation-plan.md`: GitHub Issue implementation plan template
-- `docs/design/*.md`: per-Issue detailed design docs from Plan mode, session-scoped
-  (see [`docs/github-operations.md`](docs/github-operations.md) §3) — read only the
-  one for the Issue being implemented, not the whole directory
 
 Update docs when behavior, setup, commands, architecture, or security
 assumptions change.
@@ -153,12 +148,15 @@ assumptions change.
 Repository-local Agent Skills live under `skills/` (see
 [`skills/README.md`](skills/README.md)):
 
-- `create-issue`: file or standardize an Issue with valid project metadata
-- `issue-implementation`: implement exactly one Issue end to end
+- `create-issue`: file or standardize an Issue with labels and native
+  `Blocked by` dependencies (no GitHub Projects)
+- `issue-implementation`: implement exactly one Issue end to end, including an
+  independent reviewer-role pass before the PR
 - `handoff-issue`: resume an existing Issue worktree after an interruption
+- `orchestrate-project-issues`: coordinate several Issues with dependency order,
+  run-time agent/model routing, and role programs
 - `requirements-review` / `architecture-review` / `design-doc-review`: the
-  documentation review criteria, also used as reviewer prompts by the local AI
-  review hook
+  documentation review criteria (results go in the Issue/PR)
 - `writing-good-tests`: how to write a test (the *what to test* strategy stays
   in [`docs/testing.md`](docs/testing.md))
 
@@ -179,22 +177,23 @@ Quick reminders for agent sessions:
   [`docs/github-operations.md`](docs/github-operations.md) §2.
 - Use `handoff-issue` to resume an existing Issue worktree after a session or
   agent change; never create a duplicate worktree or discard inherited WIP.
-- Do not commit secrets, local state, generated caches, or AI review artifacts.
+- Use GitHub Issues, labels, and native `Blocked by` relations for work
+  tracking. Never query or mutate GitHub Projects.
+- Keep implementation plans, detailed designs, review results, and evaluation
+  evidence in the Issue/PR. Do not create per-Issue document files.
+- Do not commit secrets, local state, or generated caches.
 
-## Local AI Review
+## Review
 
-This repository uses a local Git `post-commit` hook for AI review. Setup, branch
-rules, review units, review budget, skip conditions, and cleanup live in
-[`docs/local-ai-review.md`](docs/local-ai-review.md).
+Review is an independent **reviewer role** on a different verified agent route,
+dispatched with `scripts/project-issue-dispatch.mjs --role reviewer` — one pass
+per Issue, with at most one implementer fix pass that is not re-reviewed. The
+verdict is a GitHub comment headed `role=reviewer pass=<N> verdict=<…>`. See
+[`docs/github-operations.md`](docs/github-operations.md) §8.
 
-- Install once after cloning: `bash scripts/setup-hooks.sh`.
-- The hook is opt-in. Do not assume it has run unless verified in the current
-  environment.
-- Use `[skip-review]` only when
-  [`docs/local-ai-review.md`](docs/local-ai-review.md) allows it.
-- Treat hook output under `state/ai-reviews/` as local state. Do not commit it.
-- Wait for a queued review with `scripts/wait-for-local-ai-review.sh` rather
-  than repeatedly re-checking `state/ai-reviews/`.
+- Install the pre-commit quality-gate hook once after cloning:
+  `bash scripts/setup-hooks.sh`. Do not assume it has run unless verified in
+  the current environment.
 
 ## Quality Gates
 
@@ -280,14 +279,12 @@ Primary responsibilities:
 - Do not add new dependencies, frameworks, or build tools without a clear,
   documented reason.
 
-## Gemini Branch Naming and Local AI Review
+## Gemini Branch Naming
 
-Issue work uses `issue-<number>-<short-slug>`; the reviewer is resolved from the
-Issue's lifecycle metadata, so no agent prefix is needed. The legacy `gemini/`
-prefix still routes to Gemini review for branches created before Issue
-worktrees. Gemini review runs through the Antigravity CLI (`agy --mode plan`)
-and writes results under `state/ai-reviews/`. See
-[`docs/local-ai-review.md`](docs/local-ai-review.md).
+Issue work uses `issue-<number>-<short-slug>`; agent identity is lifecycle
+metadata, so no agent prefix is needed. Pass `--agent gemini` to
+`scripts/issue-worktree.sh`. Only the independent `gemini` CLI is a worker or
+reviewer route; Antigravity (`agy`) is excluded by the orchestrator.
 
 ## Gemini Response Expectations
 
