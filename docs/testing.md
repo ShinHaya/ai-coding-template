@@ -67,3 +67,9 @@ to merge. -->
 ## 8. Strategy Decisions
 
 <!-- Record deliberate testing decisions and what would trigger revisiting them. -->
+
+The state-migration integration tests cover one-time file/directory moves,
+no-clobber behavior, concurrent startup, dry-run reads, mode/byte preservation,
+symlink refusal, valid cache reuse and rejection of old checkpoint formats.
+See [the migration procedure](development.md#tooling-state-name-migration) before
+merging into a checkout with active orchestration.

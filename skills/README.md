@@ -15,15 +15,15 @@ point at `skills/<name>`. Edit only the files under `skills/`.
 | [`create-issue`](create-issue/SKILL.md) | Filing or standardizing an Issue with labels and native `Blocked by` dependencies |
 | [`issue-implementation`](issue-implementation/SKILL.md) | Implementing exactly one Issue end to end: worktree gate, commit, independent reviewer pass, PR, CI monitoring |
 | [`handoff-issue`](handoff-issue/SKILL.md) | Resuming an existing Issue worktree after a session limit, interruption, or agent change |
-| [`orchestrate-project-issues`](orchestrate-project-issues/SKILL.md) | Coordinating several Issues: dependency order, run-time agent/model routing, role programs, integration gate |
+| [`orchestrate-issues-implementation`](orchestrate-issues-implementation/SKILL.md) | Coordinating several Issues: dependency order, run-time agent/model routing, role programs, integration gate |
 
 The workflow skills call these tools:
 
 | Tool | Used by |
 | --- | --- |
 | `scripts/issue-worktree.sh` (`create` / `status` / `handoff` / `release` / `cleanup`) | `issue-implementation`, `handoff-issue` |
-| `scripts/project-issue-dispatch.mjs --role reviewer` | `issue-implementation` (pre-PR review), `orchestrate-project-issues` |
-| `scripts/project-issue-orchestrator.mjs`, `project-issue-capabilities.mjs`, `project-issue-graph.mjs` | `orchestrate-project-issues` |
+| `scripts/issue-dispatch.mjs --role reviewer` | `issue-implementation` (pre-PR review), `orchestrate-issues-implementation` |
+| `scripts/issue-orchestrator.mjs`, `issue-capabilities.mjs`, `issue-graph.mjs` | `orchestrate-issues-implementation` |
 | `gh` (Issues, PRs, checks) | all workflow skills |
 
 ## Documentation review skills

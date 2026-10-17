@@ -1,6 +1,6 @@
 # Local state: orchestrator run state, capability cache, triage evaluation,
-# and state/project-issue-orchestrator.yaml (the runtime copy of
-# config/project-issue-orchestrator.example.yaml)
+# and state/issue-orchestrator.yaml (the runtime copy of
+# config/issue-orchestrator.example.yaml)
 state/
 
 # Personal Claude Code settings

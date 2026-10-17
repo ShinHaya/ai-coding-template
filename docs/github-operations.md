@@ -139,14 +139,6 @@ for type and Priority, native `Blocked by` relationships for dependencies,
 and Issue/PR milestones for implementation progress. Size and agent/model
 routing are run-time decisions, not fields to write at Issue creation.
 
-Legacy `project-metadata` blocks and the Project utility functions kept in
-`scripts/project-issue-github.mjs` are historical compatibility artifacts; they do
-not authorize Project access. No Project GitHub App or `GH_PROJECT_TOKEN` is
-required for implementation. Start a single Issue with the
-worktree helper (§2), or coordinate explicit Issue numbers through the Issue-only
-orchestrator. Issue bodies remain confined to the responsible worker or isolated
-opt-in triage child.
-
 Use Issues to define the goal, scope, non-scope, implementation direction, and
 acceptance criteria before starting non-trivial work.
 
@@ -242,11 +234,11 @@ Review is performed by an independent **reviewer role**, not a commit hook:
 
 - **Single Issue** (`issue-implementation`): before push, the implementer
   dispatches one reviewer on a different verified route with
-  `node scripts/project-issue-dispatch.mjs --role reviewer --execution-mode
+  `node scripts/issue-dispatch.mjs --role reviewer --execution-mode
   direct-review --review-pass 1`. The reviewer works read-only in the Issue
   worktree and posts one Issue comment whose first line is
   `role=reviewer pass=1 verdict=<PASS|NEEDS_REVISION|REJECTED>`.
-- **Orchestrated Issues** (`orchestrate-project-issues`): the reviewer posts the
+- **Orchestrated Issues** (`orchestrate-issues-implementation`): the reviewer posts the
   same verdict line as a PR comment. `gh pr review` is not used because one
   account owns both the PR and the review.
 - Review is bounded: one pass per Issue. `NEEDS_REVISION` allows one implementer

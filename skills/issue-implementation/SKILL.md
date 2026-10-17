@@ -62,7 +62,7 @@ Follow this workflow:
    edits and commits stay in the Issue worktree). Prepare a local test summary.
 4. **Review before push or PR creation.** Dispatch a reviewer role from a
    **different** verified route using
-   `node scripts/project-issue-dispatch.mjs --role reviewer
+   `node scripts/issue-dispatch.mjs --role reviewer
    --execution-mode direct-review --review-pass 1` (plus the route, issue, release
    policy, and next-milestone flags). The reviewer works read-only in the existing
    Issue worktree: it reads the Issue acceptance criteria, changed file paths,
