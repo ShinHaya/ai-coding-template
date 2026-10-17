@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import { OWNER_TYPES } from "./project-issue-assignment.mjs";
 import {
   DEFAULT_CAPABILITIES_OUTPUT,
-  discoverCapabilities,
   loadOrRefreshCapabilities,
 } from "./project-issue-capabilities.mjs";
 import {
@@ -17,6 +16,12 @@ import {
   mergeOrchestratorConfig,
 } from "./project-issue-config.mjs";
 import { fetchRepositoryIssues } from "./project-issue-github.mjs";
+import {
+  decideParentWorker,
+  parseParentWorkerMode,
+  readParentUsage,
+  resolveParentWorkerFlags,
+} from "./project-issue-parent-usage.mjs";
 import {
   applyMilestone,
   buildRunPlan,
@@ -69,6 +74,10 @@ export {
  * The orchestrating agent assigns each runnable Issue to one of the returned
  * `workerRoutes`, and re-runs with `--unavailable-agent` / `--unavailable-model`
  * when a route is lost mid-run (session limit, interruption).
+ *
+ * The parent joins the pool per `parent.workerMode` (legacy `asWorker: true`
+ * means "always"); in "auto" it needs `options.parentUsage` showing at least
+ * half of its 5-hour window left. A missing snapshot keeps the parent out.
  */
 export async function runOrchestration(input) {
   const items = parseProjectItems(input?.items, { completed: input?.state?.completed ?? [] });
@@ -109,9 +118,10 @@ export async function runOrchestration(input) {
     maxParallel: options.maxParallel,
     releasePolicy: options.releasePolicy,
   });
+  const parentWorker = parentWorkerDecision(parent, options.parentUsage);
   const workerRoutes = selectWorkerRoutes(options.capabilities ?? [], {
     parentAgent: parent.agent,
-    parentAsWorker: parent.asWorker === true,
+    parentAsWorker: parentWorker.eligible,
     unavailableAgents: options.unavailableAgents,
     unavailableModels: options.unavailableModels,
   });
@@ -122,11 +132,30 @@ export async function runOrchestration(input) {
     ...(input.fetchedBytes === undefined ? {} : { fetchedBytes: input.fetchedBytes }),
     plan,
     workerRoutes,
+    parentWorker,
     state: nextState,
     usage: buildUsageReport(
       nextState.usage,
       items.map(({ number }) => number),
     ),
+  };
+}
+
+function parentWorkerMode(parent) {
+  return parseParentWorkerMode(parent.workerMode ?? (parent.asWorker === true ? true : undefined));
+}
+
+/** Closed, non-sensitive record of why the parent is (not) in the pool. */
+export function parentWorkerDecision(parent, usage) {
+  const mode = parentWorkerMode(parent);
+  const decision = decideParentWorker(mode, usage);
+  return {
+    mode,
+    ...decision,
+    ...(mode === "auto" && usage?.status === "ok"
+      ? { remainingPercent: usage.remainingPercent, windowDurationMins: usage.windowDurationMins }
+      : {}),
+    ...(mode === "auto" && usage?.fetchedAt ? { fetchedAt: usage.fetchedAt } : {}),
   };
 }
 
@@ -163,6 +192,7 @@ export function parseCliArgs(argv) {
     ["--capabilities-output", "capabilitiesOutput"],
     ["--parent-agent", "parentAgent"],
     ["--parent-model", "parentModel"],
+    ["--parent-worker-mode", "parentWorkerMode"],
     ["--config", "configPath"],
     ["--triage", "triage"],
   ]);
@@ -181,7 +211,7 @@ export function parseCliArgs(argv) {
       continue;
     }
     if (flag === "--parent-as-worker") {
-      options.parentAsWorker = true;
+      options.parentAsWorker = "always";
       continue;
     }
     // Forces a full re-discovery of every adapter, ignoring any cached
@@ -226,6 +256,7 @@ export function parseCliArgs(argv) {
   }
   if (options.triage !== undefined && !["off", "shadow", "assisted"].includes(options.triage))
     throw new Error("triage-invalid-mode");
+  resolveParentWorkerFlags(options);
   if (options.ownerType !== undefined && !OWNER_TYPES.has(options.ownerType))
     throw new Error("invalid-owner-type");
   if (options.milestoneJson && options.milestoneFile) throw new Error("milestone-source-conflict");
@@ -359,11 +390,16 @@ async function main() {
     ...(cli.existingWorktrees === undefined ? {} : { existingWorktrees: cli.existingWorktrees }),
     ...(capabilities === undefined ? {} : { capabilities }),
     ...(cli.parentAgent && cli.parentModel
-      ? { parent: { agent: cli.parentAgent, model: cli.parentModel, ...(effectiveCli.parentAsWorker === true ? { asWorker: true } : {}) } }
+      ? { parent: { agent: cli.parentAgent, model: cli.parentModel, workerMode: effectiveCli.parentAsWorker } }
       : {}),
   };
   if ((cli.parentAgent && !cli.parentModel) || (!cli.parentAgent && cli.parentModel))
     throw new Error("parent-agent-and-model-required");
+  // Read the parent's 5-hour window at assignment time; never cached or
+  // persisted. Pre-baked input snapshots (tests) take precedence.
+  const parent = input.options.parent;
+  if (parent?.agent && parentWorkerMode(parent) === "auto" && input.options.parentUsage === undefined)
+    input.options.parentUsage = await readParentUsage(input.options.parent.agent);
   const result = await runOrchestration(input);
   if (capabilityDiagnostics !== undefined) result.capabilityDiagnostics = capabilityDiagnostics;
   if (capabilityCacheStatus !== undefined) result.capabilityCacheStatus = capabilityCacheStatus;

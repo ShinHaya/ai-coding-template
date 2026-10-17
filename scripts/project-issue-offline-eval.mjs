@@ -1,5 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { validateTelemetryEvent } from "./project-issue-telemetry.mjs";
 import { VALID_MODES } from "./project-issue-modes.mjs";
 

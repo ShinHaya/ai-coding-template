@@ -441,7 +441,7 @@ test("real child fetch keeps private body and gh stderr out of parent", async (t
   });
   await writeFile(
     gh,
-    `#!${process.execPath}\nif (process.env.TYPESAFE_API_KEY) process.exit(9); process.stderr.write("fake-private-error"); process.stdout.write(${JSON.stringify(payload)});\n`,
+    `#!/bin/sh\n[ -z "\${TYPESAFE_API_KEY:-}" ] || exit 9\nprintf '%s' 'fake-private-error' >&2\nprintf '%s' '${payload}'\n`,
     { mode: 0o700 },
   );
   const result = await runTriageChild(input, config, {

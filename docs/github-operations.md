@@ -383,3 +383,23 @@ authentication and access control, or irreversible destruction of user data.
 
 For each new Issue: **one type label, optionally one `priority:*`**, then add
 `security` / `discussion` / `acceptance-test` if they apply.
+
+## 12. Parent worker admission
+
+Both orchestrator CLIs accept `--parent-worker-mode auto|always|never`; YAML
+`run.parentAsWorker` supplies the default when the CLI does not override it.
+The default is `auto`: include verified parent-runtime worker routes only when
+the parent's exact 300-minute usage window has at least 50% remaining. Missing,
+invalid, blocked, or unavailable usage excludes the parent. Currently only the
+Codex App Server supplies a verified machine-readable usage interface.
+
+Legacy YAML `false` maps to `auto`, `true` and `--parent-as-worker` map to
+`always`. Use `never` to retain unconditional exclusion. Conflicting CLI flags
+fail with `parent-worker-mode-conflict`. Unavailable agent/model exclusions and
+independent reviewer selection continue to apply.
+
+The graph refreshes usage before new assignments and handoffs, including after
+a manual assignment resumes. Running workers are preserved when usage falls.
+Only the closed decision/snapshot is reported; account IDs, plans, credentials,
+and raw responses must never enter state or logs. Admission is a point-in-time
+check because the parent and workers share quota.
