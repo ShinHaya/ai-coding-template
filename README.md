@@ -14,9 +14,9 @@ them — so a new project starts with the operating model already in place.
 | --- | --- |
 | Agent entry docs | `AGENTS.md` (canonical), `CLAUDE.md`, `GEMINI.md` sharing one identical instruction block |
 | Subagent definitions | `.claude/agents/`, `.agents/agents/` — a reasoning subagent and a mechanical-execution subagent |
-| Workflow skills | `skills/{create-issue,issue-implementation,handoff-issue,orchestrate-project-issues}`, linked from `.claude/skills/` and `.agents/skills/` |
+| Workflow skills | `skills/{create-issue,issue-implementation,handoff-issue,orchestrate-issues-implementation}`, linked from `.claude/skills/` and `.agents/skills/` |
 | Issue worktrees | `scripts/issue-worktree.sh` — one guarded worktree per Issue, with session leases and handoff epochs |
-| Reviewer role and orchestration | `scripts/project-issue-*.mjs` — verified agent/model route discovery, role dispatch (implementer / planner / reviewer), dependency-ordered multi-Issue plans, optional LangGraph runner |
+| Reviewer role and orchestration | `scripts/issue-*.mjs` — verified agent/model route discovery, role dispatch (implementer / planner / reviewer), dependency-ordered multi-Issue plans, optional LangGraph runner |
 | Documentation review | `skills/{requirements,architecture,design-doc}-review` — review criteria owned by each skill |
 | Commit guards | `.githooks/pre-commit` quality gates; a Claude Code `PreToolUse` hook that blocks commits outside an Issue worktree |
 | Docs | `docs/` — requirements, architecture, development, testing, security, dependency security, GitHub operations |
@@ -43,7 +43,7 @@ Then create the `priority:P0`–`priority:P3` labels described in
 
 ```bash
 bash scripts/setup-hooks.sh
-npm ci   # only needed for the scripts/project-issue-*.mjs orchestration tools
+npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
 ```
 
 `setup-hooks.sh` sets `git config --local core.hooksPath .githooks`, which
@@ -64,13 +64,13 @@ after a headless probe verifies them at run time.
    on the primary clone.
 3. **Review before the PR.** The implementer dispatches one reviewer on a
    different verified agent route
-   (`scripts/project-issue-dispatch.mjs --role reviewer`). The verdict
+   (`scripts/issue-dispatch.mjs --role reviewer`). The verdict
    (`PASS` / `NEEDS_REVISION` / `REJECTED`) is posted as an Issue comment;
    `NEEDS_REVISION` allows one fix pass that is not re-reviewed.
 4. **Open the PR and watch CI**, with at most three bounded CI fix cycles.
 5. **Hand off** with the `handoff-issue` skill if the session ends or the agent
    changes. Inherited work in progress is preserved, never stashed or reset.
-6. **Coordinate several Issues** with the `orchestrate-project-issues` skill:
+6. **Coordinate several Issues** with the `orchestrate-issues-implementation` skill:
    it plans from `Blocked by` dependencies, assigns verified routes at run
    time, and releases dependents only after the configured milestone.
 7. **Merge and clean up** per `docs/github-operations.md` §9.

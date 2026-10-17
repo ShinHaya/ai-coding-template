@@ -152,7 +152,7 @@ Repository-local Agent Skills live under `skills/` (see
 - `issue-implementation`: implement exactly one Issue end to end, including an
   independent reviewer-role pass before the PR
 - `handoff-issue`: resume an existing Issue worktree after an interruption
-- `orchestrate-project-issues`: coordinate several Issues with dependency order,
+- `orchestrate-issues-implementation`: coordinate several Issues with dependency order,
   run-time agent/model routing, and role programs
 - `requirements-review` / `architecture-review` / `design-doc-review`: the
   documentation review criteria (results go in the Issue/PR)
@@ -185,7 +185,7 @@ Quick reminders for agent sessions:
 ## Review
 
 Review is an independent **reviewer role** on a different verified agent route,
-dispatched with `scripts/project-issue-dispatch.mjs --role reviewer` — one pass
+dispatched with `scripts/issue-dispatch.mjs --role reviewer` — one pass
 per Issue, with at most one implementer fix pass that is not re-reviewed. The
 verdict is a GitHub comment headed `role=reviewer pass=<N> verdict=<…>`. See
 [`docs/github-operations.md`](docs/github-operations.md) §8.

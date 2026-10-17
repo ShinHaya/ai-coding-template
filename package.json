@@ -3,12 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Dependencies for the Issue orchestration scripts. Only needed if the project uses scripts/project-issue-*.mjs.",
+  "description": "Dependencies for the Issue orchestration scripts. Only needed if the project uses scripts/issue-*.mjs.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test:orchestrator": "node --test tests/unit/project-issue-*.test.mjs tests/unit/issue-only-orchestration.test.mjs"
+    "test:orchestrator": "node --test tests/ai-template/*.test.mjs"
   },
   "devDependencies": {
     "@langchain/core": "^1.2.3",

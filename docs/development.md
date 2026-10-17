@@ -28,7 +28,7 @@ review criteria**. GitHub workflow rules live in
   orchestrator
 - `jq` — required by `scripts/issue-worktree.sh` and the Claude Code guard hook
 - `shellcheck` (recommended) — shell script linting
-- Node.js (version in `.nvmrc`) — only for `scripts/project-issue-*.mjs`
+- Node.js (version in `.nvmrc`) — only for `scripts/issue-*.mjs`
 - Agent CLIs used as workers or reviewers: `codex`, `claude`, `grok`, or
   `gemini` (only routes verified at run time are used)
 
@@ -38,7 +38,7 @@ review criteria**. GitHub workflow rules live in
 
 ```bash
 # Install dependencies
-# (npm ci is needed only for the project-issue-* orchestration scripts)
+# (npm ci is needed only for the issue-* orchestration scripts)
 npm ci
 
 # Install the local Git hooks (once per clone)
@@ -148,7 +148,7 @@ Code review (human or AI) prioritizes, in this order:
 
 Apply the same order when acting as the independent reviewer role dispatched
 by [`issue-implementation`](../skills/issue-implementation/SKILL.md) or
-[`orchestrate-project-issues`](../skills/orchestrate-project-issues/SKILL.md)
+[`orchestrate-issues-implementation`](../skills/orchestrate-issues-implementation/SKILL.md)
 (see [`github-operations.md`](github-operations.md) §8).
 
 ### 9.2 Documentation Reviews
@@ -175,15 +175,14 @@ one. Both defer the worktree rules to
 [`github-operations.md`](github-operations.md) §2.
 
 Coordinate several Issues with
-[`orchestrate-project-issues`](../skills/orchestrate-project-issues/SKILL.md).
-Its scripts keep the historical `project-issue-` prefix:
+[`orchestrate-issues-implementation`](../skills/orchestrate-issues-implementation/SKILL.md).
 
 ```bash
 npm ci
 # Discover verified worker routes (codex / claude / grok / gemini CLIs)
-node scripts/project-issue-capabilities.mjs
+node scripts/issue-capabilities.mjs
 # Plan explicit Issues without writing anything
-node scripts/project-issue-orchestrator.mjs --issues 12,13 --dry-run \
+node scripts/issue-orchestrator.mjs --issues 12,13 --dry-run \
   --max-parallel 2 --release-policy merged \
   --parent-agent <agent> --parent-model <model>
 # Orchestration tests
@@ -192,8 +191,8 @@ npm run test:orchestrator
 
 The orchestrator reads the repository from `GITHUB_REPOSITORY` (`owner/name`)
 when set, otherwise from `gh repo view` in the current checkout. Copy
-`config/project-issue-orchestrator.example.yaml` to
-`state/project-issue-orchestrator.yaml` for run defaults.
+`config/issue-orchestrator.example.yaml` to
+`state/issue-orchestrator.yaml` for run defaults.
 
 Development Issue triage is optional and `off` by default. When an operator
 enables it, an isolated child process may send a reviewed Issue title and body
@@ -210,3 +209,19 @@ enable it for Issues that contain secrets or personal data.
 - Issue worktree lifecycle metadata lives under the shared Git common directory
   (`.git/issue-worktrees/`), not in the worktree.
 - `.worktrees/` holds per-Issue agent worktrees and is git-ignored.
+
+## Tooling state name migration
+
+The orchestration tools and skill now use the `issue-` prefix and
+`orchestrate-issues-implementation` name. Tests live under `tests/ai-template/`.
+At startup, previous-prefix config, capability cache and graph state paths are
+moved to the new names only when the destination is absent. A message is written
+to stderr. When both paths exist, neither is overwritten; inspect and reconcile
+them manually. Config/cache dry runs read the old paths without moving them.
+
+YAML configuration accepts only the `run` section; remove former board
+owner/name settings before loading old configuration files.
+
+The graph checkpoint format and node names have changed. Finish active
+orchestrations before merging this migration. Existing checkpoint bytes are
+preserved, but old-format checkpoints cannot resume; start a new graph run.
