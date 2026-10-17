@@ -1,4 +1,5 @@
 import test from "node:test";
+import { freshCheckoutEnv } from "../helpers/fresh-checkout.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -70,7 +71,13 @@ test("CLI plans from Issue numbers and a run-only config, stripping unrelated ke
   const settings = await loadOrchestratorConfig(config);
   assert.equal(settings.projectName, undefined);
   const gh = path.join(dir, "gh");
-  await writeFile(gh, `#!/bin/sh\nexec '${process.execPath}' --input-type=module -e '\nif (process.env.TYPESAFE_API_KEY || process.env.GH_PROJECT_TOKEN) process.exit(9);\nconst args=process.argv.slice(1).join(" ");\nif (/projectsV2|projectV2|fieldValues|\\\\bbody\\\\b/.test(args)) process.exit(10);\nconsole.log(JSON.stringify({data:{repository:{issue:${JSON.stringify(issue(1))}}}}));\n' "$@"\n`);
+  await writeFile(gh, `#!/bin/sh
+[ -z "\${TYPESAFE_API_KEY:-}\${GH_PROJECT_TOKEN:-}" ] || exit 9
+case "$*" in
+  *projectsV2*|*projectV2*|*fieldValues*|*' body '*) exit 10 ;;
+esac
+printf '%s\\n' '${JSON.stringify({ data: { repository: { issue: issue(1) } } })}'
+`);
   await chmod(gh, 0o755);
   const capabilities = path.join(dir, "capabilities.json");
   await writeFile(capabilities, JSON.stringify([
@@ -81,7 +88,7 @@ test("CLI plans from Issue numbers and a run-only config, stripping unrelated ke
     "scripts/project-issue-orchestrator.mjs", "--issues", "1", "--dry-run", "--config", config,
     "--capabilities-file", capabilities, "--parent-agent", "Codex", "--parent-model", "fixture-parent",
   ], { cwd: path.resolve(import.meta.dirname, "../.."), env: {
-    ...process.env, PATH: `${dir}:${process.env.PATH}`, TYPESAFE_API_KEY: "fake-key", GH_PROJECT_TOKEN: "fake-project-key", GITHUB_REPOSITORY: "example-org/example-repo",
+    ...await freshCheckoutEnv(dir), TYPESAFE_API_KEY: "fake-key", GH_PROJECT_TOKEN: "fake-project-key", GITHUB_REPOSITORY: "example-org/example-repo",
   } });
   const result = JSON.parse(stdout);
   assert.equal(result.plan.runnable[0].number, 1);

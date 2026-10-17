@@ -50,6 +50,8 @@ test("runtime adapters evaluate in fixed Codex → Claude → Grok → Gemini or
   );
 });
 
+// Allow slow fake CLI startup on instrumented developer machines.
+// Timeout-behavior tests retain their explicit short budgets.
 test("discovers only verified routes and keeps partial failures isolated", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-cap-partial-"));
   const bin = path.join(directory, "bin");
@@ -103,7 +105,7 @@ test("discovers only verified routes and keeps partial failures isolated", async
   const result = await discoverCapabilities({
     env: { ...process.env, PATH: isolatedPath(bin) },
     pathEnv: isolatedPath(bin),
-    timeoutMs: 5_000,
+    timeoutMs: 30_000,
     workerTimeoutMs: 60_000,
     // Headless-exec wiring is covered by its own tests; stub it here so this
     // test stays focused on auth/model-list discovery.
@@ -431,7 +433,7 @@ test("writes capabilities atomically and never leaves a partial final file", asy
     outputPath,
     env: { ...process.env, PATH: isolatedPath(bin) },
     pathEnv: isolatedPath(bin),
-    timeoutMs: 3_000,
+    timeoutMs: 30_000,
     workerTimeoutMs: 12_000,
     headlessExecProbe: async () => ({ ok: true }),
   });
@@ -666,28 +668,28 @@ async function makeProbeReactingBin(directory, name, behavior) {
 test("runHeadlessExecProbe passes when the CLI writes the exact requested artifact", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-ok-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "completes");
-  const result = await runHeadlessExecProbe({ cliPath, args: ["--model", "x"], timeoutMs: 10_000 });
+  const result = await runHeadlessExecProbe({ cliPath, args: ["--model", "x"], timeoutMs: 30_000 });
   assert.deepEqual(result, { ok: true });
 });
 
 test("runHeadlessExecProbe reports tty-required when the CLI demands a real terminal", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-tty-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "ttyRequired");
-  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
+  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 30_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.TTY_REQUIRED });
 });
 
 test("runHeadlessExecProbe reports non-agentic-print-mode on a clean exit with no artifact", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-print-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "printOnly");
-  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
+  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 30_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.NON_AGENTIC_PRINT_MODE });
 });
 
 test("runHeadlessExecProbe reports headless-exec-failed on an unexplained non-zero exit", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-failed-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "execFails");
-  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
+  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 30_000 });
   assert.deepEqual(result, { ok: false, reason: REASON_CODES.HEADLESS_EXEC_FAILED });
 });
 
@@ -701,7 +703,7 @@ test("runHeadlessExecProbe reports verification-timeout and cleans up its sandbo
 test("runHeadlessExecProbe never leaks the generated prompt or marker in its result", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "example-headless-probe-secrecy-"));
   const cliPath = await makeProbeReactingBin(directory, "probe-cli", "printOnly");
-  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 10_000 });
+  const result = await runHeadlessExecProbe({ cliPath, args: [], timeoutMs: 30_000 });
   assert.deepEqual(Object.keys(result).sort(), ["ok", "reason"]);
 });
 
@@ -723,7 +725,7 @@ test("a failed headless probe zeroes out an adapter's records instead of trustin
   const result = await discoverAllCapabilities({
     env: { ...process.env, PATH: isolatedPath(bin) },
     pathEnv: isolatedPath(bin),
-    timeoutMs: 5_000,
+    timeoutMs: 30_000,
     only: ["Grok"],
     headlessExecProbe: async () => ({ ok: false, reason: REASON_CODES.TTY_REQUIRED }),
   });
@@ -775,7 +777,7 @@ test("discoverCapabilities records per-agent CLI path/version metadata and a pro
   const result = await discoverCapabilities({
     env: { ...process.env, PATH: isolatedPath(bin) },
     pathEnv: isolatedPath(bin),
-    timeoutMs: 3_000,
+    timeoutMs: 30_000,
     workerTimeoutMs: 12_000,
     headlessExecProbe: async () => ({ ok: true }),
   });

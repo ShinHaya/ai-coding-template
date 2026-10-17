@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -197,7 +196,7 @@ export class JsonlTelemetrySink extends TelemetrySink {
           try {
             const parsed = JSON.parse(line);
             events.push(validateTelemetryEvent(parsed));
-          } catch (e) {
+          } catch {
             // Ignore malformed individual lines to degrade gracefully
           }
         }
@@ -294,7 +293,7 @@ export class SqliteTelemetrySink extends TelemetrySink {
           payload: JSON.parse(row.payload_json),
         })
       );
-    } catch (err) {
+    } catch {
       return [];
     }
   }
@@ -358,7 +357,6 @@ export function generateLLMOpsReport(events = []) {
   const validatedEvents = events.map(validateTelemetryEvent);
 
   const totalEvents = validatedEvents.length;
-  const routeDecisions = validatedEvents.filter((e) => e.type === "route_decision");
   const roleExecutions = validatedEvents.filter((e) => e.type === "role_execution");
   const terminalOutcomes = validatedEvents.filter((e) => e.type === "terminal_outcome");
 
@@ -387,13 +385,12 @@ export function generateLLMOpsReport(events = []) {
     runsByCorrelation[event.correlationId].push(event);
   }
 
-  let totalHandoffs = 0;
   let runsWithHandoffs = 0;
   let handoffsWithSuccess = 0;
   let totalHumanInterventions = 0;
   const latenciesMs = [];
 
-  for (const [correlationId, runEvents] of Object.entries(runsByCorrelation)) {
+  for (const runEvents of Object.values(runsByCorrelation)) {
     const routeDec = runEvents.find((e) => e.type === "route_decision");
     const term = runEvents.find((e) => e.type === "terminal_outcome");
 
@@ -421,7 +418,6 @@ export function generateLLMOpsReport(events = []) {
       }
 
       if (term.payload.handoffCount > 0) {
-        totalHandoffs += term.payload.handoffCount;
         runsWithHandoffs += 1;
         if (isSuccess) handoffsWithSuccess += 1;
       }
