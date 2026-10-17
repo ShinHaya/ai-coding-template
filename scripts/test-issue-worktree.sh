@@ -159,11 +159,18 @@ printf '%s\n' '{"repository":{"baseBranch":"develop"}}' > "$CONFIG_REPO/.ai-temp
 ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 390 configured-base --agent codex --session configured-session --repo "$CONFIG_REPO"
 CONFIG_WORKTREE="$CONFIG_REPO/.worktrees/issue-390-configured-base"
 assert_eq "$(git -C "$CONFIG_WORKTREE" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse origin/develop)"
+# A colliding local branch/tag must not override the verified remote ref.
+git -C "$CONFIG_REPO" checkout --orphan collision-fixture >/dev/null 2>&1
+git -C "$CONFIG_REPO" commit --allow-empty -m collision-fixture >/dev/null
+git -C "$CONFIG_REPO" branch origin/develop
+git -C "$CONFIG_REPO" tag develop
+git -C "$CONFIG_REPO" checkout develop >/dev/null 2>&1
 git -C "$CONFIG_REPO" remote set-url origin "$TMP_ROOT/unavailable-configured-remote.git"
 ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 391 configured-cached --agent codex --session configured-cache --repo "$CONFIG_REPO"
+assert_eq "$(git -C "$CONFIG_REPO/.worktrees/issue-391-configured-cached" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse refs/remotes/origin/develop)"
 git -C "$CONFIG_REPO" update-ref -d refs/remotes/origin/develop
 ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 392 configured-local --agent codex --session configured-local --repo "$CONFIG_REPO"
-assert_eq "$(git -C "$CONFIG_REPO/.worktrees/issue-392-configured-local" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse develop)"
+assert_eq "$(git -C "$CONFIG_REPO/.worktrees/issue-392-configured-local" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse refs/heads/develop)"
 printf '%s\n' '{"repository":{"baseBranch":"bad name"}}' > "$CONFIG_REPO/.ai-template/config.json"
 OUT=$(assert_fails env ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 393 invalid-config --agent codex --session configured-invalid --repo "$CONFIG_REPO")
 assert_contains "$OUT" "cannot read repository configuration"

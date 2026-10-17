@@ -92,8 +92,10 @@ Follow this workflow:
    `same-route-reviewer:*` in the PR description. If route discovery fails,
    state that clearly and proceed without a reviewer pass; record this exception
    in the PR description.
-5. Push the branch to GitHub and create a PR. Include `Closes #<issue>` in the
-   PR body so GitHub closes the Issue automatically when the PR is merged.
+5. Push the branch to GitHub and create a PR with
+   `gh pr create --base <baseBranch>`, using the configured branch resolved in
+   step 2 even when GitHub has a different default branch. Include
+   `Closes #<issue>` in the PR body so GitHub closes the Issue automatically when the PR is merged.
    Include the reviewer verdict and link to its Issue comment; for
    `NEEDS_REVISION`, also include findings and the implementer fix summary.
 6. **Monitor CI/CD on the PR.** Initialize a CI fix counter to **0** (separate

@@ -1,7 +1,7 @@
 {
   "repository": {
     "baseBranch": "main",
-    "qualityGates": ["npm run lint", "npm test"],
+    "qualityGates": [],
     "documents": {
       "requirements": "docs/requirements.md",
       "architecture": "docs/architecture.md",
