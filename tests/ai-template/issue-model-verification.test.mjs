@@ -1,3 +1,4 @@
+import { loadRuntimeRegistry } from "../../scripts/ai-template/registry.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmod, mkdtemp, rm, readFile, writeFile, rename } from "node:fs/promises";
@@ -187,7 +188,7 @@ test("fresh-looking Antigravity cache is discarded before CLI version checks", a
   await rename(path.join(directory, "gemini"), agy);
   const cachePath = path.join(directory, "capabilities.json");
   await writeFile(cachePath, JSON.stringify({
-    probeSchemaVersion: PROBE_SCHEMA_VERSION, repositoryCommit: await getRepositoryCommit(process.cwd()),
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint, repositoryCommit: await getRepositoryCommit(process.cwd()),
     capabilities: [{ agent: "Gemini", model: "working", role: "worker", selector: `${agy} --model working --print`, selectable: true, verifiable: true, timeoutMs: 1000 }],
     diagnostics: [], cli: { Gemini: { path: agy, version: "test-cli-1" } },
   }));

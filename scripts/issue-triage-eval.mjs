@@ -8,6 +8,7 @@
  * case ids, enums, probabilities and counts only — never titles, bodies, request
  * or response text.
  */
+import { loadRuntimeRegistry } from "./ai-template/registry.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,7 +48,7 @@ export const MIN_CASES = 100;
 export const MIN_HIGH_CRITICAL = 30;
 const FIXTURE_UPDATED_AT = "2026-01-01T00:00:00Z";
 // Labels only; the route question is evaluated separately through RouteEvidence.
-const FIXTURE_ROUTES = [{ agent: "Codex", model: "eval-fixture" }];
+const fixtureRoutes = () => loadRuntimeRegistry().enabled.slice(0, 1).map(r => ({ agent: r.name, model: "eval-fixture" }));
 const label = (value) => typeof value === "string" && /^[\w .()+-]{1,100}$/.test(value);
 const isHighCritical = (risk) => risk === "high" || risk === "critical";
 
@@ -280,7 +281,7 @@ export async function runTriageEvaluation(
           {
             issue: index + 1,
             issueUpdatedAt: FIXTURE_UPDATED_AT,
-            routes: FIXTURE_ROUTES,
+            routes: fixtureRoutes(),
             routeEvidence: [],
             policyVersion: TRIAGE_POLICY,
             model: dataset.model,

@@ -76,7 +76,8 @@ implement on detached HEAD or check out local `main` in an agent worktree.
 
 ### 2.3 Parallel multi-agent development (worktrees)
 
-Codex, Claude, Grok, and Gemini may run Issue implementation at the same time.
+Registered runtimes may run Issue implementation at the same time.
+Use `node scripts/ai-template.mjs agents list` to inspect IDs and aliases.
 The repository-local Issue implementation skill defers branch creation and the
 worktree gate to this section.
 
@@ -117,7 +118,7 @@ It must diagnose the existing lifecycle state before mutation and then call:
 
 ```bash
 bash scripts/issue-worktree.sh handoff <issue> \
-  --agent <codex|claude|grok|gemini> --session <non-sensitive-session-id>
+  --agent <agent-id> --session <non-sensitive-session-id>
 ```
 
 A successful different-session handoff increments `handoff_epoch`. This also

@@ -1,3 +1,4 @@
+import { loadRuntimeRegistry } from "../../scripts/ai-template/registry.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
@@ -770,7 +771,7 @@ test("CLI reuses a fresh capabilities cache instead of re-probing every adapter 
       diagnostics: [{ agent: "Codex", status: "ok", model: "gpt-cached" }],
       cli: { Codex: { path: codexPath, version: "codex-fake 1.0.0" } },
       probedAt: "2026-01-01T00:00:00.000Z",
-      probeSchemaVersion: PROBE_SCHEMA_VERSION,
+      probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
       repositoryCommit: await getRepositoryCommit(process.cwd()),
     }),
   );

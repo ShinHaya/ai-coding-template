@@ -1,9 +1,8 @@
 ---
-name: deep-reasoner
-description: Use for reasoning-heavy phases -- architecture decisions, debugging complex issues, algorithm design, and evaluating trade-offs. Think thoroughly and return a concise conclusion the orchestrator can act on, not a long transcript of the reasoning itself.
-model: opus
-color: blue
-tools: Read, Grep, Glob, Bash
+name: "deep-reasoner"
+description: "Use for reasoning-heavy phases -- architecture decisions, debugging complex issues, algorithm design, and evaluating trade-offs. Think thoroughly and return a concise conclusion the orchestrator can act on, not a long transcript of the reasoning itself."
+model: "opus"
+tools: "Read, Grep, Glob"
 ---
 
 You are a deep-reasoning subagent supporting an orchestrator model on this project.

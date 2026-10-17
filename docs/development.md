@@ -28,10 +28,10 @@ review criteria**. GitHub workflow rules live in
   orchestrator
 - `jq` — required by `scripts/issue-worktree.sh` and the Claude Code guard hook
 - `shellcheck` (recommended) — shell script linting
-- Node.js (version in `.nvmrc`) — for orchestration and for worktree creation
-  when `.ai-template/config.json` exists
-- Agent CLIs used as workers or reviewers: `codex`, `claude`, `grok`, or
-  `gemini` (only routes verified at run time are used)
+- Node.js (version in `.nvmrc`) — for orchestration, runtime registration,
+  generation and worktree ownership operations
+- Agent CLIs declared by `agents/runtimes/*.json` and enabled in repository
+  settings (only routes verified at run time are used)
 
 <!-- Add the project's language runtime and package manager. -->
 
@@ -180,7 +180,7 @@ Coordinate several Issues with
 
 ```bash
 npm ci
-# Discover verified worker routes (codex / claude / grok / gemini CLIs)
+# Discover verified routes from enabled runtime definitions
 node scripts/issue-capabilities.mjs
 # Plan explicit Issues without writing anything
 node scripts/issue-orchestrator.mjs --issues 12,13 --dry-run \
@@ -256,10 +256,70 @@ Inspect settings with `node scripts/repository-config.mjs`, or select a value
 with `--get baseBranch`, `--get qualityGates`, or `--get documents`. `--root`
 selects another checkout. Malformed settings, invalid branch names, unknown
 repository/document fields, and escaping document paths fail before Git fetch
-or branch creation. Agent/runtime and local-skill settings are left to their
-own registration validator in the next phase.
+or branch creation. Agent/runtime and local-skill settings are validated by the runtime registry
+before discovery, generation and worktree ownership operations.
 
 `.githooks/pre-commit`, product CI and package scripts remain repo-owned. The
 configuration reader does not replace or rewrite those files. Configure their
 actual checks in the adopting repository. Role instructions and review skills
-refer to `AGENTS.md`; their models and discovery formats remain unchanged here.
+refer to `AGENTS.md`; their models and discovery formats are generated from runtime definitions.
+
+## Runtime registration and generated files
+
+`agents/runtimes/*.json` is the runtime registry. Each filename must match its
+lowercase `id`. Definitions declare display names, case-insensitive aliases,
+evaluation order, executable names, auth/catalog parser names, argv, discovery
+directories, role serializers/model tiers and optional hook registrations.
+Schemas live in `agents/{runtimes,config}.schema.json`; the standard-library
+validator implements the vocabulary used there. Unknown fields, ambiguous aliases,
+retired enablement and escaping paths fail before discovery or generation.
+
+```bash
+node scripts/ai-template.mjs agents list
+node scripts/ai-template.mjs generate
+# Inspect another checkout without changing the current directory
+node scripts/ai-template.mjs agents list --root /path/to/checkout
+```
+
+Repository-owned `.ai-template/config.json` can set `agents.enabled` to an array
+of exact IDs. An empty array disables all runtimes. When omitted, definitions'
+`enabledByDefault` values preserve the pre-registry runtime set. The adoption
+example explicitly enables the four selected runtimes; optional runtimes must be
+enabled deliberately. A disabled runtime remains a valid worktree owner for
+handoff, but cannot be discovered, selected or launched. `--agent` accepts registered
+aliases and stores canonical IDs. Retired definitions also block old command
+aliases in cached/explicit selectors. Node is required for these identity checks.
+
+For a new CLI, add one JSON and enable its ID. Ordinary JSON arrays or provider/model
+line catalogs use the existing generic parsers. CLI-specific state parsers are a
+closed library, never dynamic imports from a definition. Auth/catalog success is
+insufficient: every exact model must complete the artifact probe before it becomes
+a route. Registry/config fingerprints invalidate capability caches after uncommitted
+settings changes. Never put credentials or guessed model catalogs in definitions.
+Repo-owned `.ai-template/runtimes/<id>.json` supports experiments with new IDs;
+shadowing a shipped ID or alias fails.
+
+`agents/roles/*.md` owns role bodies and runtime-neutral `name`, `description`,
+`tier` and `tools` frontmatter. Generation maps tiers to runtime model settings;
+`inherit` leaves selection to the host. The legacy agent-JSON representation
+inherits the host model and tool policy. Markdown formats translate read-only
+roles to restricted tool/permission declarations.
+
+`generate` creates relative skill links and role definitions for enabled runtimes.
+Shared discovery directories are deduplicated. Repo-owned skills under `skills/`
+are linked too; `localSkills` lists required local names so omissions fail early.
+Hook entries are marked in their command and recorded exactly; unrelated settings
+and hooks survive regeneration. OpenCode's runtime/skills/subagents are supported;
+its hook/plugin guard integration remains outside this Issue's scope.
+
+Commit `.ai-template/generated.json` with generated files. It records owned paths,
+hashes/link targets and hook entries, independently of the managed-file lock planned
+for the synchronization tool. Disabling/removing a definition deletes only unchanged
+owned outputs; edits/collisions and symlink parents fail before any output writes.
+Byte-identical generated outputs can be adopted safely. First adoption also
+recognizes unchanged legacy template files/links listed in
+`agents/legacy-generated.json`; differing consumer definitions require explicit
+migration in that consumer's adoption PR. Empty generated directories can remain.
+Generation is deterministic and can be rerun after interruption. It is not a
+transaction across all files. `sync`, `check`, managed tests and `lock.json` are
+implemented in the later synchronization phase.

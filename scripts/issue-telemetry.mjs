@@ -1,3 +1,4 @@
+import { isKnownAgent } from "./issue-assignment.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -24,7 +25,6 @@ const PROHIBITED_FIELDS = new Set([
 
 const VALID_EVENT_TYPES = new Set(["route_decision", "role_execution", "terminal_outcome"]);
 const VALID_AVAILABILITY = new Set(["exact", "estimate", "unavailable"]);
-const VALID_AGENTS = new Set(["Codex", "Claude", "Grok", "Gemini"]);
 const VALID_MODES = new Set(["single-agent", "multi-agent", "bounded-retry"]);
 const VALID_EXIT_CLASSIFICATIONS = new Set([
   "success",
@@ -588,11 +588,11 @@ export function validateTelemetryEvent(event) {
       throw new Error("invalid-route-candidates");
     }
     for (const cand of payload.candidates) {
-      if (!cand || !VALID_AGENTS.has(cand.agent) || typeof cand.model !== "string") {
+      if (!cand || !isKnownAgent(cand.agent) || typeof cand.model !== "string") {
         throw new Error("invalid-route-candidate");
       }
     }
-    if (!payload.selected || !VALID_AGENTS.has(payload.selected.agent) || typeof payload.selected.model !== "string") {
+    if (!payload.selected || !isKnownAgent(payload.selected.agent) || typeof payload.selected.model !== "string") {
       throw new Error("invalid-route-selected");
     }
     if (typeof payload.reasonCode !== "string" || !payload.reasonCode) {
@@ -602,7 +602,7 @@ export function validateTelemetryEvent(event) {
     if (typeof payload.role !== "string" || !payload.role) {
       throw new Error("invalid-role");
     }
-    if (!VALID_AGENTS.has(payload.agent)) {
+    if (!isKnownAgent(payload.agent)) {
       throw new Error(`invalid-agent:${payload.agent}`);
     }
     if (typeof payload.model !== "string" || !payload.model) {

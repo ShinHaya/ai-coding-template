@@ -3,7 +3,7 @@
 /**
  * Deterministic worker-runtime capability discovery for issue orchestration.
  *
- * Evaluates Codex → Claude → Grok → Gemini adapters in fixed order, emits only
+ * Evaluates enabled runtime definitions in their declared order, emits only
  * verified capability records, and writes the result atomically. Diagnostics use
  * closed reason codes and never store credentials, prompts, Issue bodies, diffs,
  * or model response bodies.
@@ -20,22 +20,22 @@ import {
   PROBE_SCHEMA_VERSION,
   REASON_CODES,
   getRepositoryCommit,
-  isAntigravityCommand,
   isRetiredRuntimeRoute,
   readCliVersion,
   runProcess,
   writeJsonAtomic,
 } from "./issue-runtime-adapters/shared.mjs";
-import { RUNTIME_ADAPTERS, discoverAllCapabilities } from "./issue-runtime-adapters/index.mjs";
+import { discoverAllCapabilities } from "./issue-runtime-adapters/index.mjs";
+
+import { loadRuntimeRegistry, findRuntime, isRetiredCommand } from "./ai-template/registry.mjs";
 
 import { selectWorkerRoutes } from "./issue-plan.mjs";
 
 export const DEFAULT_CAPABILITIES_OUTPUT = "state/issue-capabilities.json";
 
-/** Resolve a user-supplied agent name to its canonical `RUNTIME_ADAPTERS` casing, or null. */
-function canonicalAgentName(name) {
-  const needle = String(name ?? "").trim().toLowerCase();
-  return RUNTIME_ADAPTERS.find((adapter) => adapter.agent.toLowerCase() === needle)?.agent ?? null;
+/** Only enabled registered routes may be discovered or dispatched. */
+function canonicalAgentName(name, root) {
+  return findRuntime(name, root, { enabledOnly: true })?.name ?? null;
 }
 
 /**
@@ -102,7 +102,8 @@ export async function discoverCapabilities(options = {}) {
     cli, 
     probedAt: new Date().toISOString(),
     repositoryCommit,
-    probeSchemaVersion: PROBE_SCHEMA_VERSION
+    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    runtimeFingerprint: loadRuntimeRegistry(options.cwd).fingerprint
   };
 
   let outputPath;
@@ -189,9 +190,11 @@ export async function loadOrRefreshCapabilities(options = {}) {
   const schemaMismatch = cached && cached.probeSchemaVersion !== PROBE_SCHEMA_VERSION;
   const commitMismatch = cached && currentRepositoryCommit && cached.repositoryCommit !== currentRepositoryCommit;
 
-  const retiredCache = cached && ((cached.capabilities ?? []).some(isRetiredRuntimeRoute) ||
-    Object.values(cached.cli ?? {}).some(entry => isAntigravityCommand(entry?.path)));
-  if (!cached || refresh || schemaMismatch || commitMismatch || retiredCache) {
+  const registry = loadRuntimeRegistry(options.cwd);
+  const runtimeMismatch = cached && cached.runtimeFingerprint !== registry.fingerprint;
+  const retiredCache = cached && ((cached.capabilities ?? []).some(record => isRetiredRuntimeRoute(record, options.cwd)) ||
+    Object.values(cached.cli ?? {}).some(entry => isRetiredCommand(entry?.path, options.cwd)));
+  if (!cached || refresh || schemaMismatch || commitMismatch || runtimeMismatch || retiredCache) {
     const fresh = await discoverCapabilities({
       ...discoveryOptions,
       ...(dryRun ? {} : { outputPath: cachePath }),
@@ -202,7 +205,7 @@ export async function loadOrRefreshCapabilities(options = {}) {
   const unknownInvalidateAgents = [];
   const canonicalInvalidateAgents = [];
   for (const name of invalidateAgents ?? []) {
-    const canonical = canonicalAgentName(name);
+    const canonical = canonicalAgentName(name, options.cwd);
     if (canonical) canonicalInvalidateAgents.push(canonical);
     else unknownInvalidateAgents.push(String(name));
   }
@@ -233,6 +236,7 @@ export async function loadOrRefreshCapabilities(options = {}) {
       probedAt: cached.probedAt,
       repositoryCommit: cached.repositoryCommit,
       probeSchemaVersion: cached.probeSchemaVersion,
+      runtimeFingerprint: cached.runtimeFingerprint,
       reused: true,
     };
   }
@@ -251,6 +255,7 @@ export async function loadOrRefreshCapabilities(options = {}) {
     probedAt: targeted.probedAt,
     repositoryCommit: targeted.repositoryCommit,
     probeSchemaVersion: targeted.probeSchemaVersion,
+    runtimeFingerprint: targeted.runtimeFingerprint,
   };
   if (!dryRun && cachePath) await writeJsonAtomic(cachePath, merged);
   return { ...merged, reused: false, reprobedAgents: [...staleAgents] };
@@ -272,8 +277,8 @@ export async function refreshWorkerRoutes(options = {}) {
  * discovery. A changed selector or a failed model requires route reselection.
  */
 export async function verifyWorkerRoute(route, options = {}) {
-  if (isRetiredRuntimeRoute(route)) return { ok: false, reason: REASON_CODES.MODEL_NOT_SELECTABLE };
-  const agent = canonicalAgentName(route?.agent);
+  if (isRetiredRuntimeRoute(route, options.cwd)) return { ok: false, reason: REASON_CODES.MODEL_NOT_SELECTABLE };
+  const agent = canonicalAgentName(route?.agent, options.cwd);
   if (!agent || typeof route?.model !== "string" || !route.model ||
       typeof route?.selector !== "string" || !route.selector) {
     return { ok: false, reason: REASON_CODES.MODEL_NOT_SELECTABLE };
