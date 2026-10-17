@@ -1,0 +1,15 @@
+{
+  "repository": {
+    "baseBranch": "main",
+    "qualityGates": [],
+    "documents": {
+      "requirements": "docs/requirements.md",
+      "architecture": "docs/architecture.md",
+      "development": "docs/development.md",
+      "testing": "docs/testing.md",
+      "security": "docs/security.md",
+      "githubOperations": "docs/github-operations.md",
+      "manualTest": "docs/manual-test.md"
+    }
+  }
+}

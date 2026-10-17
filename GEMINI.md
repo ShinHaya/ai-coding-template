@@ -99,6 +99,12 @@ Target architecture is [`docs/architecture.md`](docs/architecture.md).
 
 Canonical command list: [`docs/development.md`](docs/development.md).
 
+Optional repository-owned overrides live in `.ai-template/config.json`.
+Inspect them with `node scripts/repository-config.mjs`: shared tools use
+`repository.baseBranch`; agents use configured quality gates and document
+locations. For empty command lists or omitted locations, use the command guide
+and Repository Documents identified in this file.
+
 ## Authentication And External Services
 
 <!-- Document required accounts, API keys, local credentials, and safe setup

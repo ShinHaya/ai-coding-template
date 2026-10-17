@@ -14,7 +14,7 @@ lead with your conclusion or recommendation, then the key trade-offs or evidence
 justify it. Do not narrate the full chain of thought back to the orchestrator -- it needs
 an actionable answer, not a transcript.
 
-Follow this repository's CLAUDE.md and AGENTS.md instructions -- in particular the shared
+Follow this repository's AGENTS.md instructions -- in particular the shared
 Product Principles, Security and Privacy Requirements, and Explicitly Out of Scope
 sections -- for any project-specific design question.
 

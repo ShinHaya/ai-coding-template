@@ -1,3 +1,4 @@
+import { loadRepositoryConfig } from "../repository-config.mjs";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
@@ -360,19 +361,21 @@ export async function getRepositoryCommit(cwd) {
 }
 
 /**
- * Verify that the repository checkout is not stale compared to origin/main.
- * Throws if fetch fails or if HEAD does not contain origin/main.
+ * Verify that the checkout contains the configured remote base branch.
+ * Throws if fetching fails or HEAD does not contain that branch.
  */
 export async function verifyRepositoryFreshness(cwd) {
-  const fetchResult = await runProcess("git", ["fetch", "origin", "main"], { cwd });
+  const { baseBranch } = loadRepositoryConfig(cwd).repository;
+  const baseRef = `origin/${baseBranch}`;
+  const fetchResult = await runProcess("git", ["fetch", "origin", baseBranch], { cwd });
   if (fetchResult.code !== 0) {
     throw new Error("orchestrator-checkout-stale:fetch-failed");
   }
 
-  const mergeBaseResult = await runProcess("git", ["merge-base", "--is-ancestor", "origin/main", "HEAD"], { cwd });
+  const mergeBaseResult = await runProcess("git", ["merge-base", "--is-ancestor", baseRef, "HEAD"], { cwd });
   if (mergeBaseResult.code !== 0) {
     const headResult = await runProcess("git", ["rev-parse", "HEAD"], { cwd });
-    const originMainResult = await runProcess("git", ["rev-parse", "origin/main"], { cwd });
+    const baseResult = await runProcess("git", ["rev-parse", baseRef], { cwd });
     
     const formatSha = (res) => {
       const out = String(res.stdout ?? "").trim();
@@ -381,8 +384,8 @@ export async function verifyRepositoryFreshness(cwd) {
     };
 
     const headSha = formatSha(headResult);
-    const originMainSha = formatSha(originMainResult);
-    throw new Error(`orchestrator-checkout-stale:head=${headSha},origin/main=${originMainSha}`);
+    const baseSha = formatSha(baseResult);
+    throw new Error(`orchestrator-checkout-stale:head=${headSha},${baseRef}=${baseSha}`);
   }
 }
 
@@ -495,7 +498,7 @@ function roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }) {
       // worktree directly instead.
       `Set up the Issue worktree with \`bash scripts/issue-worktree.sh ${
         skill === "handoff-issue" ? "handoff" : "create"
-      } ${issueNumber} ...\` (see docs/github-operations.md §2), then work only inside the path it prints. Do not run issue-implementation or handoff-issue.`,
+      } ${issueNumber} ...\` (see AGENTS.md for this repository's worktree rules), then work only inside the path it prints. Do not run issue-implementation or handoff-issue.`,
       `Post the implementation plan and detailed design as a comment on Issue #${issueNumber} using gh issue comment. Do not create repository design/spec/report files.`,
       "Report role-complete with role=planner when the plan comment is posted. Return its URL. Do not implement, commit, push, or open a pull request.",
     ];

@@ -32,7 +32,10 @@ After creating a repository from this template:
    **same** block into `CLAUDE.md` and `GEMINI.md`
 3. `docs/requirements.md` — product requirements, with the non-negotiables in §8
 4. `docs/architecture.md` — technology selection and boundaries
-5. `docs/development.md` — commands and quality gates (the `pre-commit` hook
+5. Optional `.ai-template/config.json` — copy `config/ai-template.example.json`
+   for the base branch, quality-gate commands and document paths. Omitted
+   commands and locations come from `AGENTS.md`.
+6. `docs/development.md` — commands and quality gates (the `pre-commit` hook
    runs `npm run format`, `lint`, and `typecheck`; adjust `.githooks/pre-commit`
    to the project's real commands)
 
@@ -50,7 +53,7 @@ npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
 applies to every worktree of the clone.
 
 Required commands: `bash`, `git`, `jq`, and `gh`. Node.js (version in `.nvmrc`)
-is needed for the orchestration scripts. Recommended: `shellcheck`. Agent CLIs
+is needed for orchestration and configured worktree creation. Recommended: `shellcheck`. Agent CLIs
 (`codex`, `claude`, `grok`, `gemini`) are used as worker or reviewer routes only
 after a headless probe verifies them at run time.
 

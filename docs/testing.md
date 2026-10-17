@@ -73,3 +73,9 @@ no-clobber behavior, concurrent startup, dry-run reads, mode/byte preservation,
 symlink refusal, valid cache reuse and rejection of old checkpoint formats.
 See [the migration procedure](development.md#tooling-state-name-migration) before
 merging into a checkout with active orchestration.
+
+Repository-settings integration tests use fake configuration and local Git
+remotes. They cover a non-default trunk, freshness rejection after the remote
+advances, invalid configuration/ref/path rejection, and settings read as data
+without running quality gates. The worktree lifecycle shell suite also creates
+from a configured non-default branch with cached-remote/local fallbacks.

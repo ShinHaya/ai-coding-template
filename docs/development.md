@@ -28,7 +28,8 @@ review criteria**. GitHub workflow rules live in
   orchestrator
 - `jq` — required by `scripts/issue-worktree.sh` and the Claude Code guard hook
 - `shellcheck` (recommended) — shell script linting
-- Node.js (version in `.nvmrc`) — only for `scripts/issue-*.mjs`
+- Node.js (version in `.nvmrc`) — for orchestration and for worktree creation
+  when `.ai-template/config.json` exists
 - Agent CLIs used as workers or reviewers: `codex`, `claude`, `grok`, or
   `gemini` (only routes verified at run time are used)
 
@@ -225,3 +226,40 @@ owner/name settings before loading old configuration files.
 The graph checkpoint format and node names have changed. Finish active
 orchestrations before merging this migration. Existing checkpoint bytes are
 preserved, but old-format checkpoints cannot resume; start a new graph run.
+
+## Repository settings
+
+Shared scripts read optional, repo-owned `.ai-template/config.json` using only
+Node standard libraries. Copy [the example](../config/ai-template.example.json)
+and set values for this repository; do not add a template overlay or edit
+shared scripts to customize them.
+
+- `repository.baseBranch` selects the worktree base and freshness target. Without
+  configuration it is `main`. Creation prefers `origin/<baseBranch>`, falling
+  back only to that same local branch when remote state is unavailable.
+  Worktree creation reads settings from the primary checkout (identified by
+  `--repo`, or discovered from Git), regardless of the helper's own location.
+  The Product Owner must keep that checkout's settings current before creation;
+  an absent config is reported before using the `main` default. Freshness checks
+  read settings in the Issue checkout being checked. Keep the same settings in
+  both checkouts. PR creation must explicitly target the configured base branch
+  even when GitHub's default branch differs.
+- `repository.qualityGates` is a list of command strings. The reader prints
+  them as data and never executes them. Workflow skills use the list; when it
+  is omitted or empty, they read `AGENTS.md` for the actual commands.
+- `repository.documents` maps `requirements`, `architecture`, `development`,
+  `testing`, `security`, `githubOperations`, and `manualTest` to relative paths
+  within the repository. Omitted locations are resolved through `AGENTS.md`,
+  rather than guessed from a fixed directory or section number.
+
+Inspect settings with `node scripts/repository-config.mjs`, or select a value
+with `--get baseBranch`, `--get qualityGates`, or `--get documents`. `--root`
+selects another checkout. Malformed settings, invalid branch names, unknown
+repository/document fields, and escaping document paths fail before Git fetch
+or branch creation. Agent/runtime and local-skill settings are left to their
+own registration validator in the next phase.
+
+`.githooks/pre-commit`, product CI and package scripts remain repo-owned. The
+configuration reader does not replace or rewrite those files. Configure their
+actual checks in the adopting repository. Role instructions and review skills
+refer to `AGENTS.md`; their models and discovery formats remain unchanged here.
