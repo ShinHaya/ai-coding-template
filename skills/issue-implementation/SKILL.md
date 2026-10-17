@@ -28,8 +28,9 @@ implementation scope from that Issue content.
 
 ## Issue worktree (MUST)
 
-Canonical rules: [`docs/github-operations.md`](../../docs/github-operations.md)
-§2.
+Canonical rules: the repository workflow document selected by
+`repository.documents.githubOperations`, or located through `AGENTS.md` when
+that setting is omitted. Follow its Issue worktree rules.
 
 - **One dedicated Issue worktree is MUST** on this skill path. Never implement,
   create a branch, or commit on the primary clone.
@@ -54,10 +55,13 @@ Canonical rules: [`docs/github-operations.md`](../../docs/github-operations.md)
 Follow this workflow:
 
 1. **Issue worktree start gate** (MUST — see above). Do not skip.
-2. The lifecycle helper attempts to fetch `origin/main` and atomically creates
-   the named Issue branch/worktree. During a temporary fetch failure it may use
-   an existing local `origin/main`, then local `main`; do not create either one
-   with ad hoc Git commands.
+2. Resolve repository settings with `node scripts/repository-config.mjs`.
+   `repository.baseBranch` selects the trunk; when configuration is absent it
+   defaults to `main`. Follow `AGENTS.md` for repository quality gates and
+   document locations when the corresponding settings are empty or omitted.
+   The lifecycle helper fetches the remote and creates the Issue worktree from
+   `origin/<baseBranch>`, then the matching local branch if fetching is unavailable.
+   Do not create either base ref with ad hoc Git commands.
 3. Implement the Issue, run the applicable checks, and commit the changes (all
    edits and commits stay in the Issue worktree). Prepare a local test summary.
 4. **Review before push or PR creation.** Dispatch a reviewer role from a
@@ -66,7 +70,7 @@ Follow this workflow:
    --execution-mode direct-review --review-pass 1` (plus the route, issue, release
    policy, and next-milestone flags). The reviewer works read-only in the existing
    Issue worktree: it reads the Issue acceptance criteria, changed file paths,
-   `git diff origin/main..HEAD`, and the local test summary. No PR exists yet.
+   `git diff origin/<baseBranch>..HEAD`, and the local test summary. No PR exists yet.
    Explicitly use `--next-milestone` to supply these pre-PR inputs and require an
    **Issue comment**, overriding the adapter's existing PR-input/comment guidance;
    do not change the dispatcher or runtime adapters for this workflow.
@@ -108,7 +112,7 @@ Follow this workflow:
    - Allow at most **3 CI fix cycles**. If CI/CD still fails after the third
      fix, stop without a fourth fix. Report in chat the failed check names,
      log summary, branch name, and remaining branch commit count
-     (`git rev-list --count origin/main..HEAD`) for handoff. Preserve the
+     (`git rev-list --count origin/<baseBranch>..HEAD`) for handoff. Preserve the
      unmerged branch and PR. If a failure cannot be fixed within Issue scope,
      report it and stop instead of expanding scope.
 

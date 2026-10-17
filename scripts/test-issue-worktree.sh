@@ -34,16 +34,16 @@ assert_fails() {
 }
 
 setup_repo() {
-  local remote=$1 repo=$2
+  local remote=$1 repo=$2 branch=${3:-main}
   git init --bare "$remote" >/dev/null
-  git init -b main "$repo" >/dev/null
+  git init -b "$branch" "$repo" >/dev/null
   git -C "$repo" config user.name Test
   git -C "$repo" config user.email test@example.invalid
   printf 'fixture\n' > "$repo/README.md"
   git -C "$repo" add README.md
   git -C "$repo" commit -m init >/dev/null
   git -C "$repo" remote add origin "$remote"
-  git -C "$repo" push -u origin main >/dev/null
+  git -C "$repo" push -u origin "$branch" >/dev/null
 }
 
 REMOTE="$TMP_ROOT/remote.git"
@@ -149,5 +149,24 @@ assert_eq "$(printf '%s' "$STATUS" | jq -r .behind)" "0"
 "$HELPER" release 368 --session gone-session --repo "$REPO" >/dev/null
 ISSUE_WORKTREE_PR_STATE=MERGED "$HELPER" cleanup 368 --pr 996 --repo "$REPO"
 [ ! -e "$GONE_WORKTREE" ] || fail "upstream-gone worktree still exists after cleanup"
+
+# Repository-owned settings select a non-default trunk without changing the helper.
+CONFIG_REPO="$TMP_ROOT/configured repository"
+CONFIG_REMOTE="$TMP_ROOT/configured-remote.git"
+setup_repo "$CONFIG_REMOTE" "$CONFIG_REPO" develop
+mkdir -p "$CONFIG_REPO/.ai-template"
+printf '%s\n' '{"repository":{"baseBranch":"develop"}}' > "$CONFIG_REPO/.ai-template/config.json"
+ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 390 configured-base --agent codex --session configured-session --repo "$CONFIG_REPO"
+CONFIG_WORKTREE="$CONFIG_REPO/.worktrees/issue-390-configured-base"
+assert_eq "$(git -C "$CONFIG_WORKTREE" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse origin/develop)"
+git -C "$CONFIG_REPO" remote set-url origin "$TMP_ROOT/unavailable-configured-remote.git"
+ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 391 configured-cached --agent codex --session configured-cache --repo "$CONFIG_REPO"
+git -C "$CONFIG_REPO" update-ref -d refs/remotes/origin/develop
+ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 392 configured-local --agent codex --session configured-local --repo "$CONFIG_REPO"
+assert_eq "$(git -C "$CONFIG_REPO/.worktrees/issue-392-configured-local" rev-parse HEAD)" "$(git -C "$CONFIG_REPO" rev-parse develop)"
+printf '%s\n' '{"repository":{"baseBranch":"bad name"}}' > "$CONFIG_REPO/.ai-template/config.json"
+OUT=$(assert_fails env ISSUE_WORKTREE_SKIP_GITHUB=1 "$HELPER" create 393 invalid-config --agent codex --session configured-invalid --repo "$CONFIG_REPO")
+assert_contains "$OUT" "cannot read repository configuration"
+[ ! -e "$CONFIG_REPO/.worktrees/issue-393-invalid-config" ] || fail "invalid configuration created a worktree"
 
 printf 'issue worktree lifecycle tests passed\n'

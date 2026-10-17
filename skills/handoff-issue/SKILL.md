@@ -42,7 +42,11 @@ Use `issue-implementation` instead when the Issue worktree and branch have not b
    - Re-running from the same session MUST keep the same epoch.
 9. Move every subsequent git and file operation to the absolute `worktree` path returned by status. The primary clone remains human-only.
 10. Post a concise audit comment to the Issue before a PR exists, or to the PR once one exists. Include epoch, old/new agent and redacted session identifiers, HEAD, dirty/unpushed/operation status, and the next known step.
-11. Summarize current state, inherited changes, unresolved findings, remaining work, and risks to the user. Then continue the Issue workflow in the same worktree.
+11. Read `node scripts/repository-config.mjs` for the configured base branch,
+    quality-gate commands and document locations. For empty or omitted commands and
+    omitted locations, follow this repository's `AGENTS.md`. Use the same configured
+    base branch for freshness checks, diffs and the PR target.
+12. Summarize current state, inherited changes, unresolved findings, remaining work, and risks to the user. Then continue the Issue workflow in the same worktree.
 
 ## Stop Conditions
 

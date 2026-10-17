@@ -7,6 +7,13 @@ description: Use when coordinating multiple GitHub Issues whose implementation o
 
 Coordinate many Issues while keeping each Issue's implementation inside its assigned worker. The parent owns graph validation, run-time routing decisions, milestones, the integration quality gate, and exceptions. No agent/model assignment is stored in Issues; every routing decision is made at run time and recorded in run state.
 
+Resolve repository settings with `node scripts/repository-config.mjs` before
+planning. Use `repository.baseBranch` for freshness, integration diffs and PR
+base branches. `repository.qualityGates` and `repository.documents` are optional;
+for empty command lists or omitted locations, follow `AGENTS.md` rather than
+guessing commands or paths.
+These settings are repo-owned and separate from the run's YAML defaults.
+
 ## Inputs and start gate
 
 GitHub Issues are the source of work. Do not query or mutate GitHub Projects.

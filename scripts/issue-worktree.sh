@@ -272,16 +272,23 @@ case "$COMMAND" in
     if worktree_registered "$WORKTREE" || [ -e "$WORKTREE" ]; then
       die "partial state: worktree path already exists without lifecycle metadata: $WORKTREE"
     fi
+    BASE_BRANCH=main
+    if [ -e "$PRIMARY/.ai-template/config.json" ]; then
+      command -v node >/dev/null 2>&1 || die "configured repository settings require Node.js"
+      CONFIG_READER=$(cd "$(dirname "$0")" && pwd)/repository-config.mjs
+      BASE_BRANCH=$(node "$CONFIG_READER" --root "$PRIMARY" --get baseBranch) \
+        || die "cannot read repository configuration"
+    fi
     if ! git -C "$PRIMARY" fetch origin; then
       note "fetch origin failed; checking existing local base refs"
     fi
-    if git -C "$PRIMARY" rev-parse --verify origin/main >/dev/null 2>&1; then
-      BASE_REF=origin/main
-    elif git -C "$PRIMARY" rev-parse --verify main >/dev/null 2>&1; then
-      BASE_REF=main
-      note "origin/main is unavailable; using local main as the worktree base"
+    if git -C "$PRIMARY" rev-parse --verify "refs/remotes/origin/$BASE_BRANCH" >/dev/null 2>&1; then
+      BASE_REF="origin/$BASE_BRANCH"
+    elif git -C "$PRIMARY" rev-parse --verify "refs/heads/$BASE_BRANCH" >/dev/null 2>&1; then
+      BASE_REF=$BASE_BRANCH
+      note "origin/$BASE_BRANCH is unavailable; using local $BASE_BRANCH as the worktree base"
     else
-      die "neither origin/main nor local main is available"
+      die "neither origin/$BASE_BRANCH nor local $BASE_BRANCH is available"
     fi
     mkdir -p "$PRIMARY/.worktrees"
     git -C "$PRIMARY" worktree add -b "$BRANCH" "$WORKTREE" "$BASE_REF"
