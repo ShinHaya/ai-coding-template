@@ -105,6 +105,14 @@ case "$COMMON" in
   *) die "unexpected Git common directory: $COMMON" ;;
 esac
 
+# Lifecycle identities use registered canonical IDs; disabled identities may hand off.
+if [ -n "$AGENT" ]; then
+  command -v node >/dev/null 2>&1 || die "runtime registration requires Node.js"
+  REGISTRY_CLI=$(cd "$(dirname "$0")" && pwd)/ai-template.mjs
+  AGENT=$(node "$REGISTRY_CLI" agents "resolve=$AGENT" --root "$REPO") \
+    || die "unknown or retired agent (see ai-template.mjs agents list)"
+fi
+
 STATE_ROOT="$COMMON/issue-worktrees"
 STATE_FILE="$STATE_ROOT/$ISSUE.json"
 LOCK_DIR="$STATE_ROOT/$ISSUE.lock"

@@ -1,3 +1,4 @@
+import { loadRuntimeRegistry } from "./ai-template/registry.mjs";
 import { validateTelemetryEvent } from "./issue-telemetry.mjs";
 import { VALID_MODES } from "./issue-modes.mjs";
 
@@ -84,10 +85,10 @@ export function buildDatasetFromTelemetryEvents(events = [], options = {}) {
           mode_hint: event.payload?.mode || event.mode,
         },
         eligible_modes: Array.from(VALID_MODES),
-        eligible_routes: ["Codex", "Claude", "Grok", "Gemini"],
+        eligible_routes: loadRuntimeRegistry(options.cwd).enabled.map(r => r.name),
         selected_configuration: {
           execution_mode: event.payload?.mode || event.mode || "direct-review",
-          assigned_agent: event.payload?.selected?.agent || event.assigned_agent || "Codex",
+          assigned_agent: event.payload?.selected?.agent || event.assigned_agent || loadRuntimeRegistry(options.cwd).enabled[0]?.name,
         },
         route_decisions: [],
         role_executions: [],
@@ -143,8 +144,8 @@ export class EvaluationPolicy {
     const mode = VALID_MODES.includes(hint) ? hint : "direct-review";
     return {
       execution_mode: mode,
-      implementer_route: "Codex",
-      reviewer_route: mode === "single-agent" ? null : "Claude",
+      implementer_route: episode.eligible_routes?.[0],
+      reviewer_route: mode === "single-agent" ? null : episode.eligible_routes?.[1] ?? null,
       retry_policy: "same-route",
     };
   }
@@ -162,8 +163,8 @@ export class LLMRankedPolicy extends EvaluationPolicy {
     const mode = episode.issue_features?.mode_hint || "multi-agent";
     return {
       execution_mode: mode,
-      implementer_route: "Claude",
-      reviewer_route: "Codex",
+      implementer_route: episode.eligible_routes?.[1] ?? episode.eligible_routes?.[0],
+      reviewer_route: episode.eligible_routes?.[0] ?? null,
       retry_policy: "alternate-route",
     };
   }

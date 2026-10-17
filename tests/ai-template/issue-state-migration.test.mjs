@@ -1,3 +1,4 @@
+import { loadRuntimeRegistry } from "../../scripts/ai-template/registry.mjs";
 import test from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -61,7 +62,7 @@ test("capability loading reuses the migrated cache without probing a real runtim
   const dir = await temporary(t);
   const cachePath = path.join(dir, "issue-capabilities.json");
   const source = path.join(dir, previousName(path.basename(cachePath)));
-  const cache = { capabilities: [], diagnostics: [], cli: {}, probeSchemaVersion: PROBE_SCHEMA_VERSION };
+  const cache = { capabilities: [], diagnostics: [], cli: {}, probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint };
   await fs.writeFile(source, JSON.stringify(cache));
   const loaded = await loadOrRefreshCapabilities({ cachePath, cwd: dir,
     resolveExecutable: async () => assert.fail("migration must retain a valid cache") });
@@ -116,6 +117,7 @@ test("CLI startup moves default legacy config and keeps stdout as a JSON plan", 
   const dir = await temporary(t);
   const root = path.resolve(import.meta.dirname, "../..");
   await fs.cp(path.join(root, "scripts"), path.join(dir, "scripts"), { recursive: true });
+  await fs.cp(path.join(root, "agents"), path.join(dir, "agents"), { recursive: true });
   await fs.symlink(path.join(root, "node_modules"), path.join(dir, "node_modules"), "dir");
   await fs.mkdir(path.join(dir, "state"));
   const source = path.join(dir, "state", previousName("issue-orchestrator.yaml"));

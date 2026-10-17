@@ -1,7 +1,7 @@
 # AI Coding Template
 
 Template repository for projects developed with multiple AI coding agents
-(Codex, Claude Code, Gemini, Grok) under one shared workflow.
+under one shared workflow. Runtime definitions select the enabled agents.
 
 It ships the parts that are the same in every project — the Issue workflow,
 per-Issue git worktrees, independent reviewer-role review, multi-Issue
@@ -53,8 +53,8 @@ npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
 applies to every worktree of the clone.
 
 Required commands: `bash`, `git`, `jq`, and `gh`. Node.js (version in `.nvmrc`)
-is needed for orchestration and configured worktree creation. Recommended: `shellcheck`. Agent CLIs
-(`codex`, `claude`, `grok`, `gemini`) are used as worker or reviewer routes only
+is needed for orchestration, generation and worktree ownership operations. Recommended: `shellcheck`. Agent CLIs
+declared by `agents/runtimes/*.json` are used as worker or reviewer routes only
 after a headless probe verifies them at run time.
 
 ## How the workflow fits together

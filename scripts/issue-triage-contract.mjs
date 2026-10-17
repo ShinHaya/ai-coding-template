@@ -1,3 +1,4 @@
+import { isKnownAgent } from "./issue-assignment.mjs";
 import { createHash } from "node:crypto";
 
 export const TRIAGE_DEFAULTS = Object.freeze({ mode: "off", model: "jev-1.13.0", maxRequests: 20 });
@@ -24,7 +25,6 @@ export const FALLBACK_REASONS = [
   "budget-exhausted",
   "insufficient-context",
 ];
-const AGENTS = ["Codex", "Claude", "Grok", "Gemini"];
 export const TASK_KINDS = ["docs", "local-code", "cross-component", "security"];
 const label = (value) => typeof value === "string" && /^[\w .()+-]{1,100}$/.test(value);
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
@@ -41,7 +41,7 @@ function keys(value, allowed) {
 }
 function route(value) {
   keys(value, ["agent", "model"]);
-  requireValue(AGENTS.includes(value.agent) && label(value.model));
+  requireValue(isKnownAgent(value.agent) && label(value.model));
   return { agent: value.agent, model: value.model };
 }
 export function normalizeTriageConfig(raw = {}) {

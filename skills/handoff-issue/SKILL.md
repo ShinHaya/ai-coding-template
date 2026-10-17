@@ -29,11 +29,12 @@ Use `issue-implementation` instead when the Issue worktree and branch have not b
 4. Inspect the reported HEAD, dirty state, upstream/ahead/behind (`upstream_gone: true` means the tracked remote branch was deleted, for example after a merged PR), Git operation, owner, and epoch. Also inspect the Issue, PR state, diff, commits, CI, and unresolved review threads.
 5. Stop while merge, rebase, cherry-pick, or bisect is active. An expired timestamp alone is not permission to discard or overwrite work.
 6. Preserve inherited files exactly. Do not stash, commit, reset, clean, switch branches, copy the WIP, or force-remove anything merely to make takeover convenient.
-7. Choose a stable session identifier available to the current runtime. It must distinguish a new session but must not contain credentials or personal data. Run:
+7. Use an ID returned by `node scripts/ai-template.mjs agents list` (registered
+   aliases resolve to canonical IDs; retired runtimes are rejected). Choose a stable session identifier available to the current runtime. It must distinguish a new session but must not contain credentials or personal data. Run:
 
    ```bash
    bash scripts/issue-worktree.sh handoff <issue> \
-     --agent <codex|claude|grok|gemini> \
+     --agent <agent-id> \
      --session <session-id>
    ```
 

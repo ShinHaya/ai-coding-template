@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { findRuntime } from "./ai-template/registry.mjs";
 /**
  * Route benchmark for RouteEvidence.
  *
@@ -31,9 +32,6 @@ export const SAMPLES_PER_KIND = 10;
 export const DEFAULT_EVIDENCE_OUTPUT = "state/route-evidence.json";
 export const DEFAULT_TASK_TIMEOUT_MS = 600_000;
 const CHECK_TIMEOUT_MS = 10_000;
-// Mirrors each runtime adapter's headless probe arguments (runtime-adapters/*.mjs).
-const HEADLESS_ARGS = { Codex: ["--skip-git-repo-check"], Claude: ["-p"], Grok: ["-p"], Gemini: [] };
-
 /* ------------------------------------------------------------------ */
 /* Fictional task set                                                  */
 /* ------------------------------------------------------------------ */
@@ -250,7 +248,7 @@ const routeModel = (route) => route.requestedModel ?? route.model;
 export async function runBenchmarkTask(
   route,
   task,
-  { run = runProcess, timeoutMs = DEFAULT_TASK_TIMEOUT_MS, env = process.env, clock = Date.now } = {},
+  { run = runProcess, timeoutMs = DEFAULT_TASK_TIMEOUT_MS, env = process.env, clock = Date.now, cwd = process.cwd() } = {},
 ) {
   const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), "route-bench-"));
   try {
@@ -261,7 +259,7 @@ export async function runBenchmarkTask(
     const workerEnv = { ...env };
     delete workerEnv.TYPESAFE_API_KEY;
     const started = clock();
-    const result = await run(tokens[0], [...tokens.slice(1), ...(HEADLESS_ARGS[route.agent] ?? []), prompt], {
+    const result = await run(tokens[0], [...tokens.slice(1), ...(findRuntime(route.agent, cwd, { enabledOnly: true })?.probeArgs ?? []), prompt], {
       timeoutMs,
       env: workerEnv,
       cwd: sandbox,

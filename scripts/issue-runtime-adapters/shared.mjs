@@ -1,3 +1,4 @@
+import { findRuntime, isRetiredCommand } from "../ai-template/registry.mjs";
 import { loadRepositoryConfig } from "../repository-config.mjs";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -21,7 +22,7 @@ export const REASON_CODES = Object.freeze({
   HEADLESS_EXEC_FAILED: "headless-exec-failed",
 });
 
-// Bumped from 30s: the Claude CLI's `auth status` / `models`
+// Bumped from 30s: CLI authentication / model catalogs
 // probes were observed timing out at 30s and passing at 120s in real runs.
 export const DEFAULT_PROBE_TIMEOUT_MS = 60_000;
 export const DEFAULT_WORKER_TIMEOUT_MS = 3_600_000;
@@ -233,7 +234,7 @@ export function reportedModels(result) {
         const event = JSON.parse(line);
         if (typeof event?.model === "string") models.push(event.model);
       } catch {
-        // Codex's CLI session header reports the selected canonical model.
+        // Plain-text CLI session headers may report the selected canonical model.
         const match = line.match(/^model:\s*(\S+)\s*$/);
         if (match) models.push(match[1]);
       }
@@ -291,14 +292,11 @@ export function splitSelector(selector) {
   return tokens;
 }
 
-/** Antigravity was withdrawn by the Product Owner; do not revive cached routes. */
-export function isAntigravityCommand(command) {
-  return typeof command === "string" && /^(agy|antigravity)(?:\.exe)?$/i.test(command.split(/[\\/]/).at(-1));
-}
-export function isRetiredRuntimeRoute(route) {
-  if (/^(agy|antigravity)$/i.test(String(route?.agent ?? "").trim())) return true;
+/** Retirement is registry data, including executable aliases in cached selectors. */
+export function isRetiredRuntimeRoute(route, root = process.cwd()) {
+  if (findRuntime(route?.agent, root)?.retired) return true;
   if (typeof route?.selector !== "string" || !route.selector.trim()) return false;
-  return isAntigravityCommand(splitSelector(route.selector)[0]);
+  return isRetiredCommand(splitSelector(route.selector)[0], root);
 }
 
 export function capabilityRecord({

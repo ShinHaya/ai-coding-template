@@ -79,3 +79,10 @@ remotes. They cover a non-default trunk, freshness rejection after the remote
 advances, invalid configuration/ref/path rejection, and settings read as data
 without running quality gates. The worktree lifecycle shell suite also creates
 from a configured non-default branch with cached-remote/local fallbacks.
+
+Runtime-registry integration tests use temporary real file trees and injected CLI
+boundaries. They cover declaration-only registration/aliases/discovery/launch,
+OpenCode generation, disabling a runtime without probing cached routes, shared
+paths/local skills/custom settings, deterministic regeneration, malformed data,
+retired routes and collision/symlink refusal. Existing exact-model and artifact
+verification suites remain the behavior contract for the generic adapter.

@@ -15,9 +15,10 @@ routes at run time.
    automatically when its recorded CLI path/`--version` no longer matches. Run
    `node scripts/issue-capabilities.mjs` directly only when you specifically want an
    unconditional full re-discovery outside the orchestrator (it always probes every adapter fresh).
-2. Adapters are evaluated in fixed order: **Codex → Claude → Grok → Gemini**. Only the independent
-   `gemini` CLI is eligible for Gemini. Antigravity (`agy`) is retired as a worker runtime
-   and is excluded even when installed or present in an old cache/explicit capability file.
+2. Enabled runtime definitions are evaluated by `evaluationOrder`, then ID. Inspect IDs,
+   aliases and enabled/disabled/retired status with `node scripts/ai-template.mjs agents list`.
+   Definition/config fingerprints invalidate the cache when registration changes, even without a
+   commit. Disabled and retired routes cannot return through cached or explicit capabilities.
 3. Each adapter performs CLI existence and auth/availability checks, then exact model selection. A
    model list alone does not make a route usable: each adapter also runs a **headless execution
    probe** for each exact model/selector pair — spawn the CLI with no TTY attached and a minimal, locally-generated

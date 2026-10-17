@@ -1,3 +1,4 @@
+import { loadRuntimeRegistry } from "../../scripts/ai-template/registry.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
@@ -808,7 +809,7 @@ test("loadOrRefreshCapabilities reuses a fresh cache without spawning any adapte
     diagnostics: [{ agent: "Grok", status: "ok", model: "grok-cached" }],
     cli: { Grok: { path: cliPath, version: "cached-version-9.9.9" } },
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   };
   await writeJsonAtomic(cachePath, cached);
@@ -871,7 +872,7 @@ test("loadOrRefreshCapabilities re-probes only the agent invalidated by a runtim
       Codex: { path: codexPath, version: "v1" },
     },
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   };
   await writeJsonAtomic(cachePath, cached);
@@ -921,7 +922,7 @@ test("loadOrRefreshCapabilities --refresh ignores the cache and re-probes everyt
     diagnostics: [],
     cli: {},
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   });
   const result = await loadOrRefreshCapabilities({
@@ -985,7 +986,7 @@ test("loadOrRefreshCapabilities canonicalizes invalidateAgents casing before dif
     diagnostics: [{ agent: "Grok", status: "ok", model: "grok-cached" }],
     cli: { Grok: { path: grokPath, version: "v1" } },
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   };
   await writeJsonAtomic(cachePath, cached);
@@ -1014,7 +1015,7 @@ test("loadOrRefreshCapabilities rejects an --invalidate-agent name that matches 
     diagnostics: [],
     cli: {},
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   });
   await assert.rejects(
@@ -1048,7 +1049,7 @@ test("loadOrRefreshCapabilities always re-probes a cached agent whose last diagn
     diagnostics: [{ agent: "Grok", status: "failed", reason: REASON_CODES.AUTH_UNAVAILABLE }],
     cli: {},
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   });
   const result = await loadOrRefreshCapabilities({
@@ -1090,7 +1091,7 @@ test("loadOrRefreshCapabilities's freshness check uses discovery's timeout budge
     diagnostics: [{ agent: "Grok", status: "ok", model: "grok-cached" }],
     cli: { Grok: { path: grokPath, version: "v1" } },
     probedAt: "2026-01-01T00:00:00.000Z",
-    probeSchemaVersion: PROBE_SCHEMA_VERSION,
+    probeSchemaVersion: PROBE_SCHEMA_VERSION, runtimeFingerprint: loadRuntimeRegistry().fingerprint,
     repositoryCommit: await getRepositoryCommit(process.cwd()),
   });
   let observedTimeoutMs;

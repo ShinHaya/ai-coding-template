@@ -1,3 +1,4 @@
+import { findRuntime } from "./ai-template/registry.mjs";
 import { isRetiredRuntimeRoute } from "./issue-runtime-adapters/shared.mjs";
 import { canonicalizeAgent, isCanonicalDate } from "./issue-assignment.mjs";
 import { roleProgramForMode, selectExecutionMode } from "./issue-roles.mjs";
@@ -169,7 +170,7 @@ function issueOrder(left, right) {
 }
 
 /**
- * Capability records identify an agent runtime (Codex/Claude/…) plus model.
+ * Capability records identify an agent runtime plus model.
  * Field name is `agent`, not API-provider branding.
  */
 export function validateCapabilities(requiredRoutes, capabilities) {
@@ -189,6 +190,7 @@ export function validateCapabilities(requiredRoutes, capabilities) {
     if (
       !match ||
       isRetiredRuntimeRoute(match) ||
+      !findRuntime(match.agent, process.cwd(), { enabledOnly: true }) ||
       (match.requestedModel !== undefined &&
         (typeof match.requestedModel !== "string" || match.requestedModel.trim() === "")) ||
       typeof match.model !== "string" ||
@@ -214,22 +216,22 @@ export function validateCapabilities(requiredRoutes, capabilities) {
  */
 export function selectWorkerRoutes(
   capabilities,
-  { parentAgent, parentAsWorker = false, unavailableAgents = [], unavailableModels = [] } = {},
+  { parentAgent, parentAsWorker = false, unavailableAgents = [], unavailableModels = [], cwd = process.cwd() } = {},
 ) {
   if (!Array.isArray(capabilities)) throw new Error("capability-records-required");
   const excludedAgents = new Set(
-    unavailableAgents.map((agent) => (canonicalizeAgent(agent) ?? "").toLowerCase()).filter(Boolean),
+    unavailableAgents.map((agent) => (canonicalizeAgent(agent, cwd) ?? "").toLowerCase()).filter(Boolean),
   );
   if (parentAgent !== undefined) {
-    if (isRetiredRuntimeRoute({ agent: parentAgent })) throw new Error("runtime-retired");
-    const canonicalParent = canonicalizeAgent(parentAgent);
+    if (isRetiredRuntimeRoute({ agent: parentAgent }, cwd)) throw new Error("runtime-retired");
+    const canonicalParent = canonicalizeAgent(parentAgent, cwd);
     if (!canonicalParent) throw new Error("invalid-parent-agent");
     if (parentAsWorker !== true) excludedAgents.add(canonicalParent.toLowerCase());
   }
   const excludedModels = new Set(unavailableModels);
   const routes = [];
   for (const record of capabilities) {
-    if (record?.role !== "worker" || isRetiredRuntimeRoute(record)) continue;
+    if (record?.role !== "worker" || isRetiredRuntimeRoute(record, cwd)) continue;
     if (
       typeof record.agent !== "string" ||
       record.agent.trim() === "" ||
@@ -250,7 +252,8 @@ export function selectWorkerRoutes(
     )
       throw new Error(`invalid-capability-record:${record?.agent ?? "unknown"}`);
     if (record.selectable !== true || record.verifiable !== true) continue;
-    if (excludedAgents.has(canonicalizeAgent(record.agent).toLowerCase())) continue;
+    if (!findRuntime(record.agent, cwd, { enabledOnly: true })) continue;
+    if (excludedAgents.has(canonicalizeAgent(record.agent, cwd).toLowerCase())) continue;
     if (excludedModels.has(record.model) || excludedModels.has(record.requestedModel)) continue;
     routes.push(record);
   }

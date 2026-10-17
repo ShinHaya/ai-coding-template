@@ -4,9 +4,9 @@ Agent Skills shared by every AI coding agent used in this repository. Each
 directory holds a `SKILL.md` (the instruction body) and, where the Codex CLI
 needs an explicit interface, an `agents/openai.yaml`.
 
-Agents discover them through symlinks: `.claude/skills/<name>` (Claude Code)
-and `.agents/skills/<name>` (Codex and other `.agents`-aware runtimes) both
-point at `skills/<name>`. Edit only the files under `skills/`.
+Run `node scripts/ai-template.mjs generate` to create the discovery symlinks declared
+by enabled runtime definitions. All links point at `skills/<name>`; edit only the
+files under `skills/`. Inspect runtime IDs with `node scripts/ai-template.mjs agents list`.
 
 ## Workflow skills
 
@@ -53,9 +53,11 @@ Issue or PR.
 
 Keep `SKILL.md` self-contained and free of project-specific product detail that
 belongs in the repository documentation identified by `AGENTS.md`. A skill that a user should be able to invoke directly needs
-`user-invocable: true` in its frontmatter. Add the matching symlinks:
+`user-invocable: true` in its frontmatter. Regenerate discovery links:
 
 ```bash
-ln -s ../../skills/<name> .claude/skills/<name>
-ln -s ../../skills/<name> .agents/skills/<name>
+node scripts/ai-template.mjs generate
 ```
+
+Repo-owned skills stay under `skills/`; list their names in `localSkills` in
+`.ai-template/config.json` so missing local skills fail generation.
