@@ -1750,7 +1750,7 @@ export function createDefaultDeps({ cwd, checkpointer, threadId }) {
   };
   return {
     uuid: () => crypto.randomUUID(),
-    readParentUsage: (agent) => readParentUsage(agent),
+    readParentUsage: (agent) => readParentUsage(agent, { cwd }),
     now: () => new Date().toISOString(),
     triageBudget: () => checkpointer?.triageBudget(runId) ?? null,
     assistedApproval: async (model) => Boolean(await loadAssistedApproval(cwd, model)),

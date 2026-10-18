@@ -43,5 +43,35 @@
       "reasoning": "inherit",
       "fast": "inherit"
     }
+  },
+  "usage": {
+    "transport": "jsonrpc-stdio",
+    "command": [
+      "codex",
+      "app-server"
+    ],
+    "initialize": {
+      "method": "initialize",
+      "params": {
+        "clientInfo": {
+          "name": "issue-orchestrator",
+          "version": "1"
+        }
+      }
+    },
+    "initialized": "initialized",
+    "request": {
+      "method": "account/rateLimits/read",
+      "params": {
+        "excludeResetCreditDetails": true
+      }
+    },
+    "windows": "$.rateLimitsByLimitId.codex | $.rateLimits",
+    "usedPercent": "usedPercent",
+    "windowDurationMins": "windowDurationMins",
+    "blocked": [
+      "$.ordinaryUsageAllowed == false",
+      "rateLimitReachedType != null"
+    ]
   }
 }

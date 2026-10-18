@@ -323,3 +323,86 @@ migration in that consumer's adoption PR. Empty generated directories can remain
 Generation is deterministic and can be rerun after interruption. It is not a
 transaction across all files. `sync`, `check`, managed tests and `lock.json` are
 implemented in the later synchronization phase.
+
+### Parent usage declarations
+
+`usage` is optional in a runtime definition. `auto` reads only enabled,
+non-retired runtimes; missing readers and failed reads produce `unknown` and
+exclude the parent. `always` and `never` skip the read. The existing rule stays:
+exactly one 300-minute window, at least 50% remaining. Weekly/token/cost totals
+are not substitutes for that window.
+
+- `transport`: `jsonrpc-stdio` (newline-framed requests), `control-stdio` (control-request/response
+  envelopes), or `exec-json` (exit 0 with one JSON document on stdout).
+- `command`: executable followed by literal arguments, executed without a shell.
+  Commands come from trusted runtime definitions; review them before enabling a
+  repo-owned experimental runtime. They run with the repository cwd and inherited
+  environment, just like other runtime CLI operations.
+- `initialize`: optional `{method, params?}` request; `initialized`: optional
+  notification method after its response (JSON-RPC only). `request` is required
+  for both stdio protocols. These fields are forbidden for `exec-json`. IDs 1
+  and 2 are transport-owned. The control protocol maps `method` to request
+  `subtype` and literal `params` to the other request fields; only matching
+  `control_response.response.request_id` envelopes are accepted.
+- `windows`: root paths separated by `|`, taking the first non-null/defined
+  value. Each path is `$.property.nested`; the selected object or array contains
+  the candidate window objects as direct children.
+- `usedPercent`, `windowDurationMins`: dot-separated paths relative to each
+  window. Usage must be an integer from 0 through 100; duration must be 300.
+- `blocked`: optional conditions of the form `path == false` or `path != null`.
+  `$.path` starts at the response root; a bare path starts at the selected
+  snapshot. Any matching condition excludes the parent. Missing fields do not
+  match. Paths read own properties only; expressions, filters and scripts are
+  unsupported and rejected at registry validation.
+
+The shared transport uses a 15-second timeout and a 1 MiB stdout budget,
+discards stderr, and terminates its child on completion/failure. Only the closed
+`status`/`remainingPercent`/`windowDurationMins`/`fetchedAt` snapshot (or a fixed
+unknown reason code) reaches orchestration. Raw replies, account IDs, plans and
+CLI error messages are never persisted or printed by this path. Graph runs keep
+only the closed snapshot in their existing checkpoint and re-read it before
+new assignments/handoffs, including resumed manual assignments.
+
+For response contracts that name a five-hour window rather than reporting a
+numeric duration, `windowSelection: "self"` selects the window itself and
+`windowDurationMins: 300` declares its duration. Use this only with a verified
+five-hour key, never for weekly/monthly quota or session totals. By default the
+selector still reads child windows with a numeric duration field. Percentages
+remain integers unless `percentFormat: "number"` explicitly permits finite
+fractional values in 0..100. Optional `resetsAt` plus `resetFormat: "iso"` require
+an ISO timestamp with timezone strictly after the read time; missing/expired
+resets yield unknown. No rounding is applied at the 50% boundary.
+
+On 2026-10-18, Codex CLI 0.163.0's `account/rateLimits/read` and Claude Code
+2.1.302's `get_usage` were verified through their local stdio protocols. Claude's
+runtime definition starts safe mode with tools disabled and session persistence
+disabled, initializes the control protocol, then requests `get_usage` with
+`skip_behaviors: true`. It sends no model prompt. Only
+`rate_limits.five_hour.utilization` and its future `resets_at` are accepted;
+`locked_reason` excludes the parent. The returned utilization is already a
+percentage, including fractions, rather than a 0..1 ratio.
+
+Claude's control method is explicitly experimental and may change. Unsupported
+versions, authentication failures, missing fields and protocol errors fail
+closed to unknown. CLI-side caching/rate limiting may affect freshness;
+`fetchedAt` records our read time, not a guarantee about the server's observation
+time. Its documented status-line and `/usage` reports were investigated as
+alternatives; this implementation does not change status-line settings or read
+transcripts, browser cookies, credentials or cached session files.
+
+Grok 1.0.52's ACP `_x.ai/billing` was also verified after initialization. Its
+`config.creditUsagePercent` applies to `currentPeriod`, which was weekly on the
+installed account; the public contract supports weekly/monthly periods. This
+is not a five-hour bucket. OpenCode 2.0.32's CLI/API investigation did not
+establish a five-hour quota contract; `stats --json` reports session/token/cost
+aggregates and the selected provider owns its limits. Neither another CLI's
+account nor a context-window limit is a valid substitute.
+
+Those two definitions explicitly declare
+`usageUnavailable: "five-hour-query-unavailable"`. The reader returns
+`parent-usage-five-hour-unavailable` without starting a CLI, so `auto` excludes
+them; `always` remains the explicit override. This follows the Product Owner's
+five-hour-only rule. A declared reader and `usageUnavailable` are mutually
+exclusive. Findings are scoped to the investigated versions, not a claim that
+no provider or future release can expose a usable query. Investigation evidence
+and the individual CLI responses are summarized in Issue #16 / PR #22.
