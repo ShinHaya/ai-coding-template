@@ -1,6 +1,5 @@
-import { spawn as nodeSpawn } from "node:child_process";
-
-import { canonicalizeAgent } from "./issue-assignment.mjs";
+import { findRuntime } from "./ai-template/registry.mjs";
+import { fetchUsage, normalizeUsage } from "./issue-runtime-adapters/usage.mjs";
 
 /**
  * Parent-as-worker gate (Issue #68). The parent runtime joins the worker pool
@@ -15,8 +14,6 @@ export const PARENT_WORKER_MODES = new Set(["auto", "always", "never"]);
 export const PARENT_USAGE_MIN_REMAINING_PERCENT = 50;
 export const PARENT_USAGE_WINDOW_MINS = 300;
 export const DEFAULT_PARENT_USAGE_TIMEOUT_MS = 15_000;
-
-const KILL_GRACE_MS = 2_000;
 
 /**
  * Map a config/CLI value onto a worker mode. `false` was the previous default
@@ -53,35 +50,6 @@ export function resolveParentWorkerFlags(options) {
 const unknown = (reason, fetchedAt) => ({ status: "unknown", reason, ...(fetchedAt ? { fetchedAt } : {}) });
 
 /**
- * Normalize an `account/rateLimits/read` result into a closed snapshot. The
- * 5-hour window is identified by its 300-minute duration in either slot;
- * a weekly or unlabeled window is never used in its place.
- */
-export function normalizeCodexRateLimits(result, { fetchedAt } = {}) {
-  if (!result || typeof result !== "object") return unknown("parent-usage-invalid-response", fetchedAt);
-  const byId = result.rateLimitsByLimitId;
-  const snapshot = byId && typeof byId === "object" && byId.codex ? byId.codex : result.rateLimits;
-  if (!snapshot || typeof snapshot !== "object") return unknown("parent-usage-invalid-response", fetchedAt);
-  const windows = [snapshot.primary, snapshot.secondary].filter(
-    (window) => window && typeof window === "object" && window.windowDurationMins === PARENT_USAGE_WINDOW_MINS,
-  );
-  if (windows.length !== 1) return unknown("parent-usage-window-missing", fetchedAt);
-  const [window] = windows;
-  const used = window.usedPercent;
-  if (!Number.isSafeInteger(used) || used < 0 || used > 100)
-    return unknown("parent-usage-invalid-value", fetchedAt);
-  // A server-side block outranks the percentage.
-  if (result.ordinaryUsageAllowed === false || (snapshot.rateLimitReachedType ?? null) !== null)
-    return unknown("parent-usage-blocked", fetchedAt);
-  return {
-    status: "ok",
-    remainingPercent: 100 - used,
-    windowDurationMins: PARENT_USAGE_WINDOW_MINS,
-    ...(fetchedAt ? { fetchedAt } : {}),
-  };
-}
-
-/**
  * Decide whether the parent runtime may take worker routes right now.
  * Unknown usage never opts the parent in.
  */
@@ -95,96 +63,19 @@ export function decideParentWorker(mode, usage) {
     : { eligible: false, reason: "parent-usage-low" };
 }
 
-/**
- * Ask the local Codex App Server for the account's rate limits over stdio
- * JSON-RPC. Stdin stays open until the answer arrives (the server exits on
- * EOF), and the child is always terminated on answer, error, or timeout.
- */
-export function fetchCodexRateLimits({
+/** Read a registered parent's usage; unsupported or failed reads never opt it in. */
+export async function readParentUsage(agent, {
   timeoutMs = DEFAULT_PARENT_USAGE_TIMEOUT_MS,
-  spawn = nodeSpawn,
-  command = "codex",
-  env = process.env,
+  now = () => new Date().toISOString(),
+  cwd = process.cwd(),
+  ...options
 } = {}) {
-  return new Promise((resolve, reject) => {
-    let child;
-    try {
-      child = spawn(command, ["app-server"], { env, stdio: ["pipe", "pipe", "ignore"] });
-    } catch {
-      reject(new Error("parent-usage-fetch-failed"));
-      return;
-    }
-    let settled = false;
-    let buffer = "";
-    let killTimer;
-    const finish = (error, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        child.stdin?.end();
-      } catch {
-        // already closed
-      }
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGTERM");
-        killTimer = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
-        killTimer.unref?.();
-        child.once("exit", () => clearTimeout(killTimer));
-      }
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const timer = setTimeout(() => finish(new Error("parent-usage-timeout")), timeoutMs);
-    const send = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
-    child.on("error", () => finish(new Error("parent-usage-fetch-failed")));
-    child.on("exit", () => finish(new Error("parent-usage-fetch-failed")));
-    child.stdin.on("error", () => finish(new Error("parent-usage-fetch-failed")));
-    child.stdout.on("data", (chunk) => {
-      buffer += chunk;
-      let newline;
-      while ((newline = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        let message;
-        try {
-          message = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (message?.id === 1) {
-          if (message.error) return finish(new Error("parent-usage-fetch-failed"));
-          send({ method: "initialized" });
-          send({ id: 2, method: "account/rateLimits/read", params: { excludeResetCreditDetails: true } });
-        } else if (message?.id === 2) {
-          if (message.error || !message.result) return finish(new Error("parent-usage-fetch-failed"));
-          return finish(null, message.result);
-        }
-      }
-    });
-    send({ id: 1, method: "initialize", params: { clientInfo: { name: "issue-orchestrator", version: "1" } } });
-  });
-}
-
-/** Runtimes with a verified machine-readable 5-hour usage interface. */
-const DEFAULT_FETCHERS = {
-  Codex: async (options) => normalizeCodexRateLimits(await fetchCodexRateLimits(options), options),
-};
-
-/**
- * Read the parent's 5-hour usage as a closed snapshot. Never throws: any
- * failure becomes `status: "unknown"` with a reason code.
- */
-export async function readParentUsage(
-  agent,
-  { fetchers = DEFAULT_FETCHERS, timeoutMs = DEFAULT_PARENT_USAGE_TIMEOUT_MS, now = () => new Date().toISOString(), spawn } = {},
-) {
   const fetchedAt = now();
-  const fetcher = fetchers[canonicalizeAgent(agent) ?? ""];
-  if (!fetcher) return unknown("parent-usage-unsupported-runtime", fetchedAt);
   try {
-    const usage = await fetcher({ timeoutMs, fetchedAt, ...(spawn ? { spawn } : {}) });
-    return usage?.status === "ok" || usage?.status === "unknown" ? usage : unknown("parent-usage-invalid-response", fetchedAt);
+    const runtime = findRuntime(agent, cwd, { enabledOnly: true });
+    if (!runtime || runtime.retired || !runtime.usage)
+      return unknown("parent-usage-unsupported-runtime", fetchedAt);
+    return normalizeUsage(await fetchUsage(runtime.usage, { ...options, timeoutMs, cwd }), runtime.usage, { fetchedAt });
   } catch (error) {
     const reason = error?.message === "parent-usage-timeout" ? "parent-usage-timeout" : "parent-usage-fetch-failed";
     return unknown(reason, fetchedAt);

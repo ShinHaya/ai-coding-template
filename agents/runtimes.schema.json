@@ -207,6 +207,96 @@
         ],
         "additionalProperties": false
       }
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "transport": {
+          "enum": [
+            "jsonrpc-stdio",
+            "exec-json"
+          ]
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          },
+          "minItems": 1
+        },
+        "initialize": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+            },
+            "params": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        "initialized": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+            },
+            "params": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        "windows": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "usedPercent": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "windowDurationMins": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "blocked": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          }
+        }
+      },
+      "required": [
+        "transport",
+        "command",
+        "windows",
+        "usedPercent",
+        "windowDurationMins"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [

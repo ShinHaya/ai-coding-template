@@ -86,3 +86,12 @@ OpenCode generation, disabling a runtime without probing cached routes, shared
 paths/local skills/custom settings, deterministic regeneration, malformed data,
 retired routes and collision/symlink refusal. Existing exact-model and artifact
 verification suites remain the behavior contract for the generic adapter.
+
+Parent usage integration tests use fictional registry definitions and actual
+Node CLI fixtures for both JSON-RPC and exec-JSON. They exercise the inclusive
+50% boundary, aliases and repository cwd, disabled/retired/unsupported readers,
+blocked/malformed/weekly/ambiguous windows, protocol errors, timeout and output
+budgets. Only synthetic account/plan fields appear in fixtures; assertions
+check that these cannot escape in the closed usage snapshot. Existing classic
+and graph tests cover explicit modes, unavailable routes, fresh reads before
+handoff/resumed assignments, and preservation of already-running workers.

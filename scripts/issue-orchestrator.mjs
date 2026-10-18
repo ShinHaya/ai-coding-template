@@ -376,7 +376,7 @@ async function main() {
   // persisted. Pre-baked input snapshots (tests) take precedence.
   const parent = input.options.parent;
   if (parent?.agent && parentWorkerMode(parent) === "auto" && input.options.parentUsage === undefined)
-    input.options.parentUsage = await readParentUsage(input.options.parent.agent);
+    input.options.parentUsage = await readParentUsage(input.options.parent.agent, { cwd: repositoryRoot });
   const result = await runOrchestration(input);
   if (capabilityDiagnostics !== undefined) result.capabilityDiagnostics = capabilityDiagnostics;
   if (capabilityCacheStatus !== undefined) result.capabilityCacheStatus = capabilityCacheStatus;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { loadRepositoryConfig } from "../repository-config.mjs";
+import { validateUsageDefinition } from "../issue-runtime-adapters/usage.mjs";
 import { validateSchema } from "./schema.mjs";
 
 export const templateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -35,6 +36,7 @@ export function loadRuntimeRegistry(root = process.cwd()) {
     for (const file of fs.readdirSync(directory).filter(f => f.endsWith(".json")).sort()) {
       const runtime = readJson(path.join(directory, file));
       validateSchema(runtime, schema, file);
+      validateUsageDefinition(runtime.usage);
       if (file !== `${runtime.id}.json`) throw new Error("runtime-id-filename-mismatch");
       if (!runtime.retired && ["models", "selectorArgs", "probeArgs", "promptArgs", "skills"].some(k => runtime[k] === undefined))
         throw new Error(`runtime-definition-incomplete:${runtime.id}`);

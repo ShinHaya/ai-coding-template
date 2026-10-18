@@ -10,11 +10,14 @@ import { Command, MemorySaver } from "@langchain/langgraph";
 
 import {
   decideParentWorker,
-  fetchCodexRateLimits,
-  normalizeCodexRateLimits,
   parseParentWorkerMode,
   readParentUsage,
 } from "../../scripts/issue-parent-usage.mjs";
+import { findRuntime } from "../../scripts/ai-template/registry.mjs";
+import { fetchUsage, normalizeUsage } from "../../scripts/issue-runtime-adapters/usage.mjs";
+const codexUsage = findRuntime("codex").usage;
+const fetchCodexRateLimits = options => fetchUsage(codexUsage, options);
+const normalizeCodexRateLimits = (result, options) => normalizeUsage(result, codexUsage, options);
 import { loadOrchestratorConfig, mergeOrchestratorConfig } from "../../scripts/issue-config.mjs";
 import { parseCliArgs, runOrchestration } from "../../scripts/issue-orchestrator.mjs";
 import { buildOrchestrationGraph, parseGraphCliArgs } from "../../scripts/issue-graph.mjs";
@@ -182,12 +185,10 @@ test("readParentUsage never throws and reports closed reason codes", async () =>
   assert.deepEqual(await readParentUsage("Codex", { now, timeoutMs: 20, spawn: fakeAppServer(() => {}).spawn }), {
     status: "unknown", reason: "parent-usage-timeout", fetchedAt,
   });
-  const throwing = { Codex: async () => { throw new Error("fixture"); } };
-  assert.deepEqual(await readParentUsage("Codex", { now, fetchers: throwing }), {
+  assert.deepEqual(await readParentUsage("Codex", { now, spawn: () => { throw new Error("fixture secret"); } }), {
     status: "unknown", reason: "parent-usage-fetch-failed", fetchedAt,
   });
-  const garbage = { Codex: async () => ({ remainingPercent: 99 }) };
-  assert.deepEqual(await readParentUsage("Codex", { now, fetchers: garbage }), {
+  assert.deepEqual(await readParentUsage("Codex", { now, spawn: respondingServer({ remainingPercent: 99 }).spawn }), {
     status: "unknown", reason: "parent-usage-invalid-response", fetchedAt,
   });
 });

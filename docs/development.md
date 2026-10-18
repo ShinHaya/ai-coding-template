@@ -323,3 +323,50 @@ migration in that consumer's adoption PR. Empty generated directories can remain
 Generation is deterministic and can be rerun after interruption. It is not a
 transaction across all files. `sync`, `check`, managed tests and `lock.json` are
 implemented in the later synchronization phase.
+
+### Parent usage declarations
+
+`usage` is optional in a runtime definition. `auto` reads only enabled,
+non-retired runtimes; missing readers and failed reads produce `unknown` and
+exclude the parent. `always` and `never` skip the read. The existing rule stays:
+exactly one 300-minute window, at least 50% remaining. Weekly/token/cost totals
+are not substitutes for that window.
+
+- `transport`: `jsonrpc-stdio` (newline-framed requests) or `exec-json` (exit 0
+  with one JSON document on stdout).
+- `command`: executable followed by literal arguments, executed without a shell.
+  Commands come from trusted runtime definitions; review them before enabling a
+  repo-owned experimental runtime. They run with the repository cwd and inherited
+  environment, just like other runtime CLI operations.
+- `initialize`: optional `{method, params?}` request; `initialized`: optional
+  notification method after its response. `request` is required for JSON-RPC.
+  These fields are forbidden for `exec-json`. IDs 1 and 2 are transport-owned.
+- `windows`: root paths separated by `|`, taking the first non-null/defined
+  value. Each path is `$.property.nested`; the selected object or array contains
+  the candidate window objects as direct children.
+- `usedPercent`, `windowDurationMins`: dot-separated paths relative to each
+  window. Usage must be an integer from 0 through 100; duration must be 300.
+- `blocked`: optional conditions of the form `path == false` or `path != null`.
+  `$.path` starts at the response root; a bare path starts at the selected
+  snapshot. Any matching condition excludes the parent. Missing fields do not
+  match. Paths read own properties only; expressions, filters and scripts are
+  unsupported and rejected at registry validation.
+
+The shared transport uses a 15-second timeout and a 1 MiB stdout budget,
+discards stderr, and terminates its child on completion/failure. Only the closed
+`status`/`remainingPercent`/`windowDurationMins`/`fetchedAt` snapshot (or a fixed
+unknown reason code) reaches orchestration. Raw replies, account IDs, plans and
+CLI error messages are never persisted or printed by this path. Graph runs keep
+only the closed snapshot in their existing checkpoint and re-read it before
+new assignments/handoffs, including resumed manual assignments.
+
+On 2026-10-18, Codex CLI 0.163.0's `account/rateLimits/read` was verified using
+this transport. Claude Code 2.1.302 exposes rate-limit data to an interactive
+status-line callback, but no standalone headless query was verified. OpenCode
+2.0.32's `stats --json` reports session/token/cost aggregates; Grok 1.0.52's
+`usage` reports persisted session/turn token and cost totals. No usable
+300-minute quota query was verified for these three CLIs, so their definitions
+omit `usage`. Their `auto` mode excludes the parent; use `always` to opt it in
+explicitly. Discovery of a supported query can add a declaration later without
+changing the decision code. Full investigation evidence is recorded in Issue
+#16; this is a version-scoped finding, not a claim that no such API can exist.
