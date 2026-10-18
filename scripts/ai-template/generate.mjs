@@ -3,7 +3,7 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { loadRuntimeRegistry, relativePath, templateRoot } from "./registry.mjs";
 
-const hash = text => createHash("sha256").update(text).digest("hex");
+export const hash = text => createHash("sha256").update(text).digest("hex");
 function writeAtomic(file, contents) {
   const temporary = `${file}.ai-template-${randomBytes(8).toString("hex")}`;
   const mode = exists(file)?.mode & 0o777 || 0o600;
@@ -13,8 +13,8 @@ function writeAtomic(file, contents) {
   } finally { if (exists(temporary)) fs.unlinkSync(temporary); }
 }
 const json = value => JSON.stringify(value, null, 2) + "\n";
-const exists = file => { try { return fs.lstatSync(file); } catch (e) { if (e.code === "ENOENT") return null; throw e; } };
-function safePath(root, relative) {
+export const exists = file => { try { return fs.lstatSync(file); } catch (e) { if (e.code === "ENOENT") return null; throw e; } };
+export function safePath(root, relative) {
   relativePath(relative);
   let parent = root;
   for (const part of relative.split("/").slice(0, -1)) {
@@ -57,7 +57,7 @@ function renderRole(role, spec) {
 }
 
 /** Plan and validate everything before touching generated files or settings. */
-export function generate(root = process.cwd()) {
+export function generate(root = process.cwd(), { dryRun = false } = {}) {
   root = fs.realpathSync(root);
   const registry = loadRuntimeRegistry(root);
   const statePath = safePath(root, ".ai-template/generated.json");
@@ -152,6 +152,12 @@ export function generate(root = process.cwd()) {
     if (!Object.keys(settings.hooks).length) delete settings.hooks;
     if (json(settings) !== before) settingsWrites.push([file, json(settings)]);
   }
+  const next = json({ version: 1, files: Object.fromEntries(Object.entries(files).sort(([a],[b]) => a.localeCompare(b))), hooks });
+  if (dryRun) {
+    const pending = [...removals, ...writes.map(([file]) => file), ...settingsWrites.map(([file]) => file)];
+    if (!exists(statePath) || fs.readFileSync(statePath, "utf8") !== next) pending.push(statePath);
+    return { pending: pending.map(file => path.relative(root, file).split(path.sep).join("/")).sort() };
+  }
   for (const file of removals) fs.unlinkSync(file);
   for (const [file, output] of writes) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -162,7 +168,6 @@ export function generate(root = process.cwd()) {
   for (const [file, contents] of settingsWrites) {
     fs.mkdirSync(path.dirname(file), { recursive: true }); writeAtomic(file, contents);
   }
-  const next = json({ version: 1, files: Object.fromEntries(Object.entries(files).sort(([a],[b]) => a.localeCompare(b))), hooks });
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   if (!exists(statePath) || fs.readFileSync(statePath, "utf8") !== next) writeAtomic(statePath, next);
   return { generated: Object.keys(files).length, written: writes.length + settingsWrites.length, removed: removals.length };
