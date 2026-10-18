@@ -37,6 +37,7 @@ export function readManifest(from) {
 /** Managed files come from the template's Git index so the lock commit describes the copied bytes. */
 export function listManagedFiles(from, { requireClean = true } = {}) {
   from = fs.realpathSync(from);
+  if (fs.realpathSync(git(from, ["rev-parse", "--show-toplevel"]).trim()) !== from) throw new Error("ai-template-source-not-toplevel");
   const { patterns, matchers } = readManifest(from);
   const managed = file => matchers.some(m => m.test(file));
   if (requireClean) {
@@ -57,7 +58,7 @@ export function listManagedFiles(from, { requireClean = true } = {}) {
     relativePath(file);
     files.push({ file, executable: mode === "100755", content: fs.readFileSync(path.join(from, file)) });
   }
-  files.sort((a, b) => a.file.localeCompare(b.file));
+  files.sort((a, b) => a.file < b.file ? -1 : 1); // Code-point order keeps the lock locale-independent.
   const commit = git(from, ["rev-parse", "HEAD"]).trim();
   return { from, commit, patterns, files, unmatched: patterns.filter((_, i) => !hits.has(i)) };
 }

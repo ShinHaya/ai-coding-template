@@ -148,6 +148,7 @@ test("the source must be a clean Git checkout without managed symlinks", t => {
   assert.equal(sync({ from, root }).written.length, 4);
   git(from, "checkout", "--", "README.md");
   assert.throws(() => sync({ from, root: from }), /ai-template-sync-self/);
+  assert.throws(() => sync({ from: path.join(from, "scripts"), root }), /ai-template-source-not-toplevel/);
   fs.symlinkSync("one.mjs", path.join(from, "scripts/link.mjs"));
   commit(from);
   assert.throws(() => sync({ from, root }), /managed-not-regular:scripts\/link\.mjs/);
