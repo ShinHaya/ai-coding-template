@@ -73,8 +73,8 @@ export async function readParentUsage(agent, {
   const fetchedAt = now();
   try {
     const runtime = findRuntime(agent, cwd, { enabledOnly: true });
-    if (!runtime || runtime.retired || !runtime.usage)
-      return unknown("parent-usage-unsupported-runtime", fetchedAt);
+    if (!runtime || runtime.retired) return unknown("parent-usage-unsupported-runtime", fetchedAt);
+    if (!runtime.usage) return unknown(runtime.usageUnavailable ? "parent-usage-five-hour-unavailable" : "parent-usage-unsupported-runtime", fetchedAt);
     return normalizeUsage(await fetchUsage(runtime.usage, { ...options, timeoutMs, cwd }), runtime.usage, { fetchedAt });
   } catch (error) {
     const reason = error?.message === "parent-usage-timeout" ? "parent-usage-timeout" : "parent-usage-fetch-failed";

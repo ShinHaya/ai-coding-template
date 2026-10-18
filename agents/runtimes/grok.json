@@ -30,5 +30,6 @@
     "{model}",
     "--permission-mode",
     "bypassPermissions"
-  ]
+  ],
+  "usageUnavailable": "five-hour-query-unavailable"
 }

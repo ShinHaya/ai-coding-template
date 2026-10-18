@@ -179,7 +179,7 @@ test("readParentUsage never throws and reports closed reason codes", async () =>
   const now = () => fetchedAt;
   const ok = await readParentUsage("codex", { now, spawn: respondingServer(response({ primary: fiveHour(50) })).spawn });
   assert.deepEqual(ok, { status: "ok", remainingPercent: 50, windowDurationMins: 300, fetchedAt });
-  assert.deepEqual(await readParentUsage("Claude", { now }), {
+  assert.deepEqual(await readParentUsage("Gemini", { now }), {
     status: "unknown", reason: "parent-usage-unsupported-runtime", fetchedAt,
   });
   assert.deepEqual(await readParentUsage("Codex", { now, timeoutMs: 20, spawn: fakeAppServer(() => {}).spawn }), {

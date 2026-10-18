@@ -88,10 +88,17 @@ retired routes and collision/symlink refusal. Existing exact-model and artifact
 verification suites remain the behavior contract for the generic adapter.
 
 Parent usage integration tests use fictional registry definitions and actual
-Node CLI fixtures for both JSON-RPC and exec-JSON. They exercise the inclusive
+Node CLI fixtures for JSON-RPC, control-stdio and exec-JSON. They exercise the inclusive
 50% boundary, aliases and repository cwd, disabled/retired/unsupported readers,
 blocked/malformed/weekly/ambiguous windows, protocol errors, timeout and output
 budgets. Only synthetic account/plan fields appear in fixtures; assertions
 check that these cannot escape in the closed usage snapshot. Existing classic
 and graph tests cover explicit modes, unavailable routes, fresh reads before
 handoff/resumed assignments, and preservation of already-running workers.
+
+Control-stdio tests also cover initialization/request errors, mismatched IDs,
+fractional percentages around 50%, an explicit five-hour selector, expired and
+missing reset timestamps, locked windows, and weekly-only responses. A runtime
+with a declared unavailable five-hour reader returns unknown without starting a
+CLI. Live checks retain only closed status/type/duration summaries; never add
+raw account/auth responses or research-agent tool logs to fixtures or commits.

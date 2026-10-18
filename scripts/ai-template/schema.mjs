@@ -5,9 +5,10 @@ export function validateSchema(value, schema, field = "root") {
   if (Object.keys(schema).some(key => !keywords.has(key))) throw new Error("runtime-schema-keyword-unsupported");
   if (schema.enum && !schema.enum.includes(value)) fail();
   if (schema.type) {
-    const ok = schema.type === "object" ? value !== null && typeof value === "object" && !Array.isArray(value)
-      : schema.type === "array" ? Array.isArray(value)
-      : schema.type === "integer" ? Number.isSafeInteger(value) : typeof value === schema.type;
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    const ok = types.some(type => type === "object" ? value !== null && typeof value === "object" && !Array.isArray(value)
+      : type === "array" ? Array.isArray(value)
+      : type === "integer" ? Number.isSafeInteger(value) : typeof value === type);
     if (!ok) fail();
   }
   if (typeof value === "string") {

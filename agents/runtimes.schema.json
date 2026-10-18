@@ -214,7 +214,8 @@
         "transport": {
           "enum": [
             "jsonrpc-stdio",
-            "exec-json"
+            "exec-json",
+            "control-stdio"
           ]
         },
         "command": {
@@ -276,9 +277,10 @@
           "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
         },
         "windowDurationMins": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "blocked": {
           "type": "array",
@@ -287,6 +289,27 @@
             "minLength": 1,
             "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
           }
+        },
+        "windowSelection": {
+          "enum": [
+            "children",
+            "self"
+          ]
+        },
+        "percentFormat": {
+          "enum": [
+            "integer",
+            "number"
+          ]
+        },
+        "resetsAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resetFormat": {
+          "enum": [
+            "iso"
+          ]
         }
       },
       "required": [
@@ -297,6 +320,11 @@
         "windowDurationMins"
       ],
       "additionalProperties": false
+    },
+    "usageUnavailable": {
+      "enum": [
+        "five-hour-query-unavailable"
+      ]
     }
   },
   "required": [

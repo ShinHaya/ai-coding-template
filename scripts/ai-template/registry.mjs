@@ -37,6 +37,7 @@ export function loadRuntimeRegistry(root = process.cwd()) {
       const runtime = readJson(path.join(directory, file));
       validateSchema(runtime, schema, file);
       validateUsageDefinition(runtime.usage);
+      if (runtime.usage && runtime.usageUnavailable) throw new Error("runtime-usage-conflict");
       if (file !== `${runtime.id}.json`) throw new Error("runtime-id-filename-mismatch");
       if (!runtime.retired && ["models", "selectorArgs", "probeArgs", "promptArgs", "skills"].some(k => runtime[k] === undefined))
         throw new Error(`runtime-definition-incomplete:${runtime.id}`);

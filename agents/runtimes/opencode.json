@@ -34,5 +34,6 @@
       "reasoning": "inherit",
       "fast": "inherit"
     }
-  }
+  },
+  "usageUnavailable": "five-hour-query-unavailable"
 }

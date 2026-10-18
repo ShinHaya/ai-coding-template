@@ -60,5 +60,40 @@
         ]
       }
     }
-  ]
+  ],
+  "usage": {
+    "transport": "control-stdio",
+    "command": [
+      "claude",
+      "--safe-mode",
+      "--tools=",
+      "--no-session-persistence",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "-p"
+    ],
+    "initialize": {
+      "method": "initialize"
+    },
+    "request": {
+      "method": "get_usage",
+      "params": {
+        "skip_behaviors": true
+      }
+    },
+    "windows": "$.rate_limits.five_hour",
+    "windowSelection": "self",
+    "usedPercent": "utilization",
+    "windowDurationMins": 300,
+    "percentFormat": "number",
+    "resetsAt": "resets_at",
+    "resetFormat": "iso",
+    "blocked": [
+      "$.rate_limits_available == false",
+      "locked_reason != null"
+    ]
+  }
 }

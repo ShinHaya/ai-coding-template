@@ -17,8 +17,8 @@ async function fixture(t, transport = "exec-json") {
   const usage = {
     transport, command: [process.execPath, cli], windows: "$.quota.buckets | $.legacy",
     usedPercent: "used", windowDurationMins: "minutes", blocked: ["$.allowed == false", "blocked != null"],
-    ...(transport === "jsonrpc-stdio" ? {
-      initialize: { method: "hello", params: {} }, initialized: "ready", request: { method: "quota", params: {} },
+    ...(transport !== "exec-json" ? {
+      initialize: { method: "hello", params: {} }, ...(transport === "jsonrpc-stdio" ? { initialized: "ready" } : {}), request: { method: "quota", params: {} },
     } : {}),
   };
   const runtime = { ...findRuntime("codex"), id: "fixture", name: "Fixture", aliases: ["fixture-alias"],
@@ -33,7 +33,13 @@ async function fixture(t, transport = "exec-json") {
       import readline from 'node:readline';
       let ready = false;
       readline.createInterface({input:process.stdin}).on('line', line => {
-        const m = JSON.parse(line);
+        const wire = JSON.parse(line);
+        const m = wire.type === 'control_request' ? {method:wire.request.subtype,id:Number(wire.request_id)} : wire;
+        const reply = value => console.log(JSON.stringify(wire.type === 'control_request'
+          ? {type:'control_response',response:{request_id:wire.request_id,subtype:'success',response:value}}
+          : {id:m.id,result:value}));
+        if(wire.type === 'control_request' && m.method === 'hello') {ready=true;reply({});return;}
+        if(wire.type === 'control_request' && m.method === 'quota') {reply(${payload});return;}
         if(m.method==='hello') console.log(JSON.stringify({id:m.id,result:{}}));
         if(m.method==='ready') ready = true;
         if(m.method==='quota') console.log(JSON.stringify(ready ? {id:m.id,result:${payload}} : {id:m.id,error:{}}));
@@ -44,7 +50,7 @@ async function fixture(t, transport = "exec-json") {
 const response = used => ({ secret: "fixture-account-plan-token", allowed: true,
   quota: { buckets: { weekly: { used: 0, minutes: 10080 }, hourly: { used, minutes: 300 }, blocked: null } } });
 
-for (const transport of ["exec-json", "jsonrpc-stdio"]) {
+for (const transport of ["exec-json", "jsonrpc-stdio", "control-stdio"]) {
   test(`${transport}: declaration alone enables a non-Codex parent's boundary, alias and closed snapshot`, async t => {
     const f = await fixture(t, transport);
     for (const [used, eligible] of [[0, true], [50, true], [51, false], [100, false]]) {
@@ -125,7 +131,7 @@ test("registry rejects unsupported usage contracts before any execution", async 
   const f = await fixture(t);
   const original = structuredClone(f.runtime.usage);
   for (const patch of [{ transport: "shell" }, { windows: "$.quota;process.exit()" }, { windows: "quota" },
-    { usedPercent: "$.used" }, { blocked: ["$.allowed = false"] }, { request: { method: "bad" } },
+    { usedPercent: "$.used" }, {windowDurationMins:10080}, {resetsAt:"reset"}, {resetFormat:"iso"}, { blocked: ["$.allowed = false"] }, { request: { method: "bad" } },
     { command: [] }, { typo: true }]) {
     f.runtime.usage = { ...original, ...patch }; await f.save();
     assert.throws(() => loadRuntimeRegistry(f.cwd), /runtime-/);
@@ -150,4 +156,49 @@ test("literal argv and cwd reach the CLI without shell evaluation", async t => {
     console.log(${JSON.stringify(JSON.stringify(response(45)))});
   `);
   assert.equal((await readParentUsage("fixture", { cwd: f.cwd })).remainingPercent, 55);
+});
+
+test("declared five-hour self window accepts decimal percentages and rejects expired/locked/missing values", async t => {
+  const f = await fixture(t, "control-stdio");
+  Object.assign(f.runtime.usage, {windows:"$.quota.five_hour",windowSelection:"self",windowDurationMins:300,
+    percentFormat:"number",resetsAt:"reset",resetFormat:"iso",blocked:["locked != null"]});
+  await f.save();
+  const raw = (used, reset="2050-01-01T00:00:00Z", extra={}) => ({quota:{five_hour:{used,reset,...extra},
+    seven_day:{used:0,reset:"2050-01-01T00:00:00Z"}}});
+  for(const [used, eligible] of [[49.9,true],[50,true],[50.1,false]]) {
+    await f.respond(raw(used));
+    const snapshot = await readParentUsage("fixture", {cwd:f.cwd,now});
+    assert.equal(snapshot.remainingPercent,100-used);
+    assert.equal(decideParentWorker("auto",snapshot).eligible,eligible);
+  }
+  for(const payload of [raw(0,"2020-01-01T00:00:00Z"),raw(0,"2026-10-18T00:00:00Z"),raw(0,null),
+    raw(0,"not-a-date"),raw(0,"2050-01-01T00:00:00"),raw(null),raw("0"),raw(0,undefined,{locked:"fixture-block"}),
+    {quota:{seven_day:{used:0,reset:"2050-01-01T00:00:00Z"}}}]) {
+    await f.respond(payload);
+    const snapshot=await readParentUsage("fixture",{cwd:f.cwd,now});
+    assert.equal(snapshot.status,"unknown");
+    assert.equal(decideParentWorker("auto",snapshot).eligible,false);
+  }
+});
+
+test("control-stdio errors, wrong response IDs and silent servers fail closed", async t => {
+  const f = await fixture(t,"control-stdio");
+  for(const phase of ["1","2"]) {
+    await fs.writeFile(f.cli,`import readline from 'node:readline';
+      readline.createInterface({input:process.stdin}).on('line',line=>{
+        const m=JSON.parse(line);console.log(JSON.stringify({type:'control_response',response:{request_id:m.request_id,
+          subtype:m.request_id===${JSON.stringify(phase)}?'error':'success',response:{},error:'fixture-secret'}}));
+      });`);
+    assert.equal((await readParentUsage("fixture",{cwd:f.cwd})).reason,"parent-usage-fetch-failed");
+  }
+  await fs.writeFile(f.cli,`process.stdin.on('data',()=>console.log(JSON.stringify({type:'control_response',response:{request_id:'wrong',subtype:'success',response:{}}})));`);
+  assert.equal((await readParentUsage("fixture",{cwd:f.cwd,timeoutMs:200})).reason,"parent-usage-timeout");
+});
+
+test("explicit no-five-hour declarations distinguish unavailable quota without spawning a CLI", async () => {
+  let spawned=false;
+  const u=await readParentUsage("grok",{now,spawn:()=>{spawned=true;throw Error('unexpected')}});
+  assert.deepEqual(u,{status:"unknown",reason:"parent-usage-five-hour-unavailable",fetchedAt});
+  assert.equal(spawned,false);
+  assert.equal(decideParentWorker("auto",u).eligible,false);
 });
