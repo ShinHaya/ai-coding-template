@@ -1,0 +1,28 @@
+{
+  "$comment": "Template-owned (managed) paths copied to consumer repositories by `node scripts/ai-template.mjs sync`. Shared skills are listed by name so repository-owned skills can live beside them.",
+  "version": 1,
+  "managed": [
+    "agents/**",
+    "config/ai-template.example.json",
+    "config/issue-orchestrator.example.yaml",
+    "scripts/ai-template.mjs",
+    "scripts/ai-template/**",
+    "scripts/issue-*.mjs",
+    "scripts/issue-runtime-adapters/**",
+    "scripts/issue-worktree.sh",
+    "scripts/repository-config.mjs",
+    "scripts/setup-hooks.sh",
+    "scripts/test-issue-worktree.sh",
+    ".claude/hooks/guard-repository.sh",
+    "skills/README.md",
+    "skills/architecture-review/**",
+    "skills/create-issue/**",
+    "skills/design-doc-review/**",
+    "skills/handoff-issue/**",
+    "skills/issue-implementation/**",
+    "skills/orchestrate-issues-implementation/**",
+    "skills/requirements-review/**",
+    "skills/writing-good-tests/**",
+    "tests/ai-template/**"
+  ]
+}
