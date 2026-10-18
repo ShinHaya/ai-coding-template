@@ -12,12 +12,19 @@ const json = value => JSON.stringify(value, null, 2) + "\n";
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 << 20 });
 
+/** Repo-owned state, workflows (the delivery App has no workflows permission) and the manifest are never managed. */
+const forbidden = file => /^(?:\.ai-template|\.git)(?:\/|$)/.test(file) || file.startsWith(".github/workflows/") || file === MANIFEST;
+function managedPath(file) {
+  relativePath(file);
+  if (forbidden(file)) throw new Error(`managed-path-forbidden:${file}`);
+  return file;
+}
+
 /** `*` stays inside one path segment; `**` spans zero or more whole segments. */
 export function compilePattern(pattern) {
   relativePath(pattern.replace(/\*/g, "x"));
   const parts = pattern.split("/");
-  if (parts.some(p => p.includes("**") && p !== "**") || [".ai-template", ".git"].includes(parts[0]) ||
-    pattern.startsWith(".github/workflows/") || pattern === MANIFEST) throw new Error(`manifest-pattern-invalid:${pattern}`);
+  if (parts.some(p => p.includes("**") && p !== "**") || forbidden(pattern)) throw new Error(`manifest-pattern-invalid:${pattern}`);
   const body = parts.map((p, i) => p === "**" ? (i === parts.length - 1 ? ".*" : "(?:[^/]+/)*")
     : p.split("*").map(s => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + (i === parts.length - 1 ? "" : "/")).join("");
   return new RegExp(`^${body}$`);
@@ -54,8 +61,8 @@ export function listManagedFiles(from, { requireClean = true } = {}) {
     const index = matchers.findIndex(m => m.test(file));
     if (index < 0) continue;
     matchers.forEach((m, i) => { if (m.test(file)) hits.add(i); });
+    managedPath(file); // Wildcards can reach forbidden paths that the pattern text does not name.
     if (mode !== "100644" && mode !== "100755") throw new Error(`managed-not-regular:${file}`);
-    relativePath(file);
     files.push({ file, executable: mode === "100755", content: fs.readFileSync(path.join(from, file)) });
   }
   files.sort((a, b) => a.file < b.file ? -1 : 1); // Code-point order keeps the lock locale-independent.
@@ -70,7 +77,7 @@ function readLock(root) {
   let lock;
   try { lock = JSON.parse(fs.readFileSync(file, "utf8")); } catch { throw new Error("lock-invalid"); }
   if (!object(lock) || lock.version !== 1 || !object(lock.source) || typeof lock.source.commit !== "string" || !object(lock.files) ||
-    Object.entries(lock.files).some(([f, e]) => { relativePath(f); return !object(e) || !/^[0-9a-f]{64}$/.test(e.sha256) || typeof e.executable !== "boolean"; }))
+    Object.entries(lock.files).some(([f, e]) => { managedPath(f); return !object(e) || !/^[0-9a-f]{64}$/.test(e.sha256) || typeof e.executable !== "boolean"; }))
     throw new Error("lock-invalid");
   return lock;
 }
@@ -113,9 +120,9 @@ export function sync({ from, root = process.cwd(), adopt = false, sourceReposito
   const result = { from: previous?.source.commit ?? null, to: source.commit, written: [], removed: [], drift: [], adopted: [] };
   const writes = [], removals = [];
   const next = new Set(source.files.map(f => f.file));
+  const isLocalSkill = relative => protectedSkills.includes(relative.match(/^skills\/([^/]+)\//)?.[1]);
   for (const { file: relative, content, executable } of source.files) {
-    const skill = relative.match(/^skills\/([^/]+)\//)?.[1];
-    if (skill && protectedSkills.includes(skill)) throw new Error(`managed-collision:${relative}`);
+    if (isLocalSkill(relative)) throw new Error(`managed-collision:${relative}`);
     const file = safePath(root, relative), stat = exists(file);
     if (stat && !regular(stat)) throw new Error(`managed-collision:${relative}`);
     const current = stat && { sha256: hash(fs.readFileSync(file)), executable: isExecutable(stat) };
@@ -133,6 +140,7 @@ export function sync({ from, root = process.cwd(), adopt = false, sourceReposito
   }
   for (const [relative, entry] of Object.entries(owned)) {
     if (next.has(relative)) continue;
+    if (isLocalSkill(relative)) throw new Error(`managed-collision:${relative}`);
     const file = safePath(root, relative), stat = exists(file);
     if (!stat) continue;
     if (!regular(stat)) throw new Error(`managed-collision:${relative}`);

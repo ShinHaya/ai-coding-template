@@ -119,6 +119,36 @@ test("local skills and non-file destinations are never overwritten, even when ad
   assert.throws(() => sync({ from, root: linked }), /parent-unsafe/);
 });
 
+test("a skill declared local after adoption is not deleted when the template drops it", t => {
+  const { root: from } = template(t);
+  const root = consumer(t);
+  sync({ from, root });
+  put(root, ".ai-template/config.json", { localSkills: ["shared"] });
+  put(root, "skills/shared/SKILL.md", "now repo-owned\n");
+  fs.rmSync(path.join(from, "skills/shared"), { recursive: true });
+  commit(from);
+  const lock = read(root, ".ai-template/lock.json");
+  assert.throws(() => sync({ from, root }), /managed-collision:skills\/shared\/SKILL\.md/);
+  assert.equal(read(root, "skills/shared/SKILL.md"), "now repo-owned\n");
+  assert.equal(read(root, ".ai-template/lock.json"), lock);
+});
+
+test("wildcards cannot reach workflows, repo-owned state or the manifest", t => {
+  for (const pattern of [".github/**", ".ai-*/**", "*.json"]) {
+    const { root: from } = template(t, [pattern, "scripts/*.mjs"]);
+    put(from, ".github/workflows/ci.yml", "name: ci\n");
+    put(from, ".ai-template/config.json", "{}\n");
+    commit(from);
+    const root = consumer(t);
+    assert.throws(() => sync({ from, root, adopt: true }), /managed-path-forbidden/, pattern);
+    assert.deepEqual(fs.readdirSync(root), [], `${pattern}: nothing is written`);
+  }
+  const root = consumer(t);
+  put(root, ".ai-template/lock.json", { version: 1, source: { commit: "x" }, files: { ".github/workflows/ci.yml": { sha256: "0".repeat(64), executable: false } } });
+  const { root: from } = template(t);
+  assert.throws(() => sync({ from, root }), /managed-path-forbidden:\.github\/workflows\/ci\.yml/);
+});
+
 test("local edits to managed files are reverted to the template and reported as drift", t => {
   const { root: from } = template(t);
   const root = consumer(t);
