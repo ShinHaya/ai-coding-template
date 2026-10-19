@@ -11,9 +11,9 @@
     "test:orchestrator": "node --test tests/ai-template/*.test.mjs"
   },
   "devDependencies": {
-    "@langchain/core": "^1.2.3",
-    "@langchain/langgraph": "^1.4.8",
+    "@langchain/core": "^1.2.18",
+    "@langchain/langgraph": "^1.5.0",
     "@langchain/langgraph-checkpoint": "^1.1.3",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }
