@@ -38,7 +38,7 @@ jobs:
     outputs:
       consumers: ${{ steps.list.outputs.consumers }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -89,11 +89,11 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
       - name: Check out template
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: template
       - name: Check out consumer base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ matrix.consumer.repo }}
           ref: ${{ matrix.consumer.base }}
