@@ -74,7 +74,8 @@ export function fetchUsage(usage, { timeoutMs = 15_000, spawn = nodeSpawn, env =
     let bytes = 0;
     let initialized = false;
     const fail = () => new Error("parent-usage-fetch-failed");
-    let timer;
+    // Assigned after spawn; a spawn failure calls finish() before that.
+    let timer = null;
     const finish = (error, value) => {
       if (settled) return;
       settled = true;

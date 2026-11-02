@@ -8,12 +8,16 @@
     "node": ">=22"
   },
   "scripts": {
+    "lint": "eslint --max-warnings=0 .",
     "test:orchestrator": "node scripts/ai-template.mjs test"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
     "@langchain/langgraph-checkpoint": "^1.1.3",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "yaml": "^2.9.0"
   }
 }

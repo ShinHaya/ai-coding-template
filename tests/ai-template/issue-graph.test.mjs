@@ -723,13 +723,13 @@ test("an invalid interactive assignment re-prompts instead of killing the run", 
 
 test("schedules dependent Issues only after the release milestone passes the gate", async () => {
   const run = makeRun();
-  let result = await run.invoke(makeInput({ items: [item(1), item(2, [1])] }));
+  await run.invoke(makeInput({ items: [item(1), item(2, [1])] }));
   assert.deepEqual(
     run.deps.dispatched.map(({ issueNumber }) => issueNumber),
     [1],
   );
 
-  result = await run.resume({ type: "milestone", issue: 1, milestone: "pr-created", usage: usageSample });
+  let result = await run.resume({ type: "milestone", issue: 1, milestone: "pr-created", usage: usageSample });
   assert.deepEqual(result.__interrupt__[0].value.gate, {
     issue: 1,
     type: "pr-created",
@@ -740,13 +740,13 @@ test("schedules dependent Issues only after the release milestone passes the gat
     ],
   });
 
-  result = await run.resume({ accepted: true });
+  await run.resume({ accepted: true });
   assert.deepEqual(
     run.deps.dispatched.map(({ issueNumber }) => issueNumber),
     [1, 2],
   );
 
-  result = await run.resume({ type: "milestone", issue: 2, milestone: "pr-created" });
+  await run.resume({ type: "milestone", issue: 2, milestone: "pr-created" });
   result = await run.resume({ accepted: true });
   assert.equal(result.runStatus, "complete");
   assert.deepEqual(result.summary.completed, [1, 2]);
@@ -787,7 +787,7 @@ test("merged release policy completes only on merged", async () => {
   const run = makeRun();
   await run.invoke(makeInput({ items: [item(1), item(2, [1])], config: { releasePolicy: "merged" } }));
   await run.resume({ type: "milestone", issue: 1, milestone: "pr-created" });
-  let result = await run.resume({ accepted: true });
+  await run.resume({ accepted: true });
   // pr-created accepted but policy is merged: dependent not released.
   assert.deepEqual(
     run.deps.dispatched.map(({ issueNumber }) => issueNumber),
@@ -798,13 +798,13 @@ test("merged release policy completes only on merged", async () => {
   assert.equal(midState.workerExecutions[0].expectedMilestone, "merged");
 
   await run.resume({ type: "milestone", issue: 1, milestone: "merged" });
-  result = await run.resume({ accepted: true });
+  await run.resume({ accepted: true });
   assert.deepEqual(
     run.deps.dispatched.map(({ issueNumber }) => issueNumber),
     [1, 2],
   );
   await run.resume({ type: "milestone", issue: 2, milestone: "merged" });
-  result = await run.resume({ accepted: true });
+  const result = await run.resume({ accepted: true });
   assert.equal(result.runStatus, "complete");
 });
 

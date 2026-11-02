@@ -155,23 +155,26 @@ export async function evaluateTriage(
   if (config.model !== input.model) return fallback("insufficient-context");
   if (!env.TYPESAFE_API_KEY) return fallback("missing-key");
   if (signal?.aborted) return fallback("cancelled");
-  let disclosure;
-  try {
-    disclosure = await fetchIssue(input.issue, { signal, env });
-  } catch {
-    return fallback(signal?.aborted ? "cancelled" : "fetch-failed");
+  let body;
+  // Block scope drops the fetched Issue before the request is sent.
+  {
+    let disclosure;
+    try {
+      disclosure = await fetchIssue(input.issue, { signal, env });
+    } catch {
+      return fallback(signal?.aborted ? "cancelled" : "fetch-failed");
+    }
+    if (signal?.aborted) return fallback("cancelled");
+    if (typeof disclosure.isPrivate !== "boolean" ||
+        (disclosure.isPrivate && config.allowPrivateIssues !== true))
+      return fallback("input-not-approved");
+    if (disclosure.updatedAt !== input.issueUpdatedAt) return fallback("stale-input");
+    if (typeof disclosure.title !== "string" || typeof disclosure.body !== "string")
+      return fallback("fetch-failed");
+    if (!disclosure.body.trim()) return fallback("insufficient-context");
+    if (containsSensitiveInput(`${disclosure.title}\n${disclosure.body}`)) return fallback("sensitive-input");
+    body = JSON.stringify(buildTriageRequest(input, context, disclosure));
   }
-  if (signal?.aborted) return fallback("cancelled");
-  if (typeof disclosure.isPrivate !== "boolean" ||
-      (disclosure.isPrivate && config.allowPrivateIssues !== true))
-    return fallback("input-not-approved");
-  if (disclosure.updatedAt !== input.issueUpdatedAt) return fallback("stale-input");
-  if (typeof disclosure.title !== "string" || typeof disclosure.body !== "string")
-    return fallback("fetch-failed");
-  if (!disclosure.body.trim()) return fallback("insufficient-context");
-  if (containsSensitiveInput(`${disclosure.title}\n${disclosure.body}`)) return fallback("sensitive-input");
-  const body = JSON.stringify(buildTriageRequest(input, context, disclosure));
-  disclosure = undefined;
   if (Buffer.byteLength(body) > REQUEST_LIMIT) return fallback("input-too-large");
   const deadline = AbortSignal.timeout(requestTimeoutMs);
   const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;

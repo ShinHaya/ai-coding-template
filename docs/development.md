@@ -80,6 +80,8 @@ bash scripts/setup-hooks.sh
 
 ```bash
 # Lint command
+# Template scripts and tests (eslint.config.js); warnings fail.
+npm run lint
 ```
 
 ## 6. Type Checking
@@ -113,6 +115,7 @@ Run the relevant checks before committing code:
 ```bash
 # format
 # lint
+npm run lint
 # typecheck
 # test
 ```

@@ -66,6 +66,13 @@ const dependencies = (overrides) => ({
   ...overrides,
 });
 const fallback = (i, reason) => ({ result: fallbackResult(triageContext(i), reason), usage: "unavailable" });
+/** Fallback result fields other than `status` and `reason`, for building decisions. */
+const fallbackMetadata = (context) => {
+  const metadata = { ...fallbackResult(context, "disabled") };
+  delete metadata.status;
+  delete metadata.reason;
+  return metadata;
+};
 async function temporary(t) {
   const dir = await mkdtemp(path.join(tmpdir(), "triage-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -269,7 +276,7 @@ test("low confidence or margin requires review; closed schemas reject injection"
   assert.throws(() => normalizeTriageConfig({ maxRequests: 21 }));
   assert.throws(() => parseDistribution({ ...distribution(RISKS, "low"), choice: "high" }, RISKS));
   const context = triageContext(input);
-  const { status, reason, ...metadata } = fallbackResult(context, "disabled");
+  const metadata = fallbackMetadata(context);
   assert.equal(
     parseTriageDecision(
       { ...metadata, action: "override", reason: "domain-review", riskCategory: "high", size: "S" },
@@ -530,7 +537,7 @@ test("route pool excludes unevaluated models and incompatible task coverage", as
 test("accept requires the corresponding usable result and cannot silently override it", async () => {
   const normalized = normalizeTriageInput(input);
   const context = triageContext(normalized, now);
-  const { status, reason, ...metadata } = fallbackResult(context, "disabled");
+  const metadata = fallbackMetadata(context);
   const decision = { ...metadata, action: "accept", reason: "accepted" };
   const { result } = await evaluateTriage(normalized, config, dependencies());
   assert.equal(parseTriageDecision(decision, context, result).riskCategory, "low");
@@ -569,7 +576,7 @@ test("risk and size may be accepted while uncertain route adoption is refused", 
     config,
     dependencies({ fetchImpl: async () => Response.json(raw) }),
   );
-  const { status, reason, ...metadata } = fallbackResult(context, "disabled");
+  const metadata = fallbackMetadata(context);
   const decision = { ...metadata, action: "accept", reason: "accepted" };
   assert.equal(parseTriageDecision(decision, context, result).preferredRoute, undefined);
   assert.throws(() =>
