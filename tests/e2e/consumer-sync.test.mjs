@@ -128,7 +128,8 @@ test("the managed suite passes inside a synced consumer", async (t) => {
 
   const suite = consumerCli(consumer, "test");
   assert.equal(suite.status, 0, `managed suite failed in the consumer:\n${suite.stdout.slice(-4000)}${suite.stderr}`);
-  const count = (name) => Number(suite.stdout.match(new RegExp(`^ℹ ${name} (\\d+)$`, "m"))?.[1]);
+  // Node 22 reports TAP ("# pass N") without a TTY; newer releases use spec ("ℹ pass N").
+  const count = (name) => Number(suite.stdout.match(new RegExp(`^(?:ℹ|#) ${name} (\\d+)$`, "m"))?.[1]);
   assert.ok(count("pass") > 0, "the managed suite ran no tests");
   assert.equal(count("fail"), 0);
 });
