@@ -26,6 +26,7 @@ missing test is an omission or a decision. -->
 | Integration | <!-- module boundaries, real storage --> | |
 | End-to-end | <!-- full user flow --> | |
 | Tooling (shell / Node) | Issue worktree lifecycle and Issue orchestration scripts; no agent CLI required | shell: yes |
+| Template delivery (E2E, template only) | The `sync-consumers` workflow's CLI steps against throwaway local consumers, then the managed suite inside a synced consumer (`tests/e2e/`, not synced) | yes |
 
 ## 3. Test Environment
 
@@ -52,6 +53,8 @@ fixtures stand in for them):
 ```bash
 bash scripts/test-issue-worktree.sh
 npm ci && npm run test:orchestrator
+# Template only: sync, regenerate, check and the managed suite in local consumers
+npm run test:e2e
 ```
 
 ## 6. Manual Testing
