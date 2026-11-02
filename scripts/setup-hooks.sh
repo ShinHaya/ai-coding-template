@@ -5,7 +5,7 @@
 # .githooks/ contents are pulled fresh. It does the minimum:
 #
 #   1. verify required commands are available
-#   2. stop, changing nothing, if core.hooksPath points somewhere else
+#   2. stop, changing nothing, if core.hooksPath (any scope) points elsewhere
 #   3. mark every hook executable
 #   4. point `git config core.hooksPath` at .githooks
 #
@@ -41,10 +41,19 @@ if [ "$missing" -gt 0 ]; then
 fi
 
 # --- 2. Do not silently replace another hook configuration ------
-CURRENT=$(git config --local --get core.hooksPath 2>/dev/null || echo "")
+# Check the effective value: a global or system hook manager is replaced by
+# a local setting just as surely as a local one.
+SCOPED=$(git config --show-scope --get core.hooksPath 2>/dev/null || echo "")
+SCOPE=${SCOPED%%$'\t'*}
+CURRENT=${SCOPED#*$'\t'}
 if [ -n "$CURRENT" ] && [ "$CURRENT" != ".githooks" ]; then
-  printf 'error: existing core.hooksPath = %s; inspect it before changing hooks\n' "$CURRENT" >&2
-  printf 'to use .githooks, run: git config --local --unset core.hooksPath, then re-run this script.\n' >&2
+  printf 'error: existing core.hooksPath = %s (%s config); inspect it before changing hooks\n' "$CURRENT" "$SCOPE" >&2
+  case "$SCOPE" in
+    local|worktree)
+      printf 'to use .githooks, run: git config --%s --unset core.hooksPath, then re-run this script.\n' "$SCOPE" >&2 ;;
+    *)
+      printf 'it also applies to other repositories; to use .githooks in this repository only, run: git config --local core.hooksPath .githooks\n' >&2 ;;
+  esac
   exit 1
 fi
 
