@@ -20,7 +20,7 @@ import { splitSelector } from "./issue-runtime-adapters/shared.mjs";
  * Launch a worker for one Issue on one capability route.
  *
  * @param {object} input
- * @param {object} input.route - capability record (agent, model, selector, timeoutMs, …)
+ * @param {import("./issue-runtime-adapters/shared.mjs").CapabilityRecord} input.route - capability record (agent, model, selector, timeoutMs, …)
  * @param {number} input.issueNumber
  * @param {string} input.releasePolicy
  * @param {string} input.nextMilestone

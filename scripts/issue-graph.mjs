@@ -191,7 +191,7 @@ export const OrchestrationState = Annotation.Root({
   unavailableModels: Annotation({ reducer: unionStrings, default: () => [] }),
   completed: Annotation({ reducer: unionNumbers, default: () => [] }),
   milestones: Annotation({ reducer: mergeMilestones, default: () => [] }),
-  usage: Annotation({ reducer: (left = {}, right = {}) => ({ ...left, ...right }), default: () => ({}) }),
+  usage: Annotation({ reducer: (/** @type {object} */ left = {}, /** @type {object} */ right = {}) => ({ ...left, ...right }), default: () => ({}) }),
   plan: Annotation(),
   /** Current route assignment per Issue: {number, agent, model, route, attempt, skill, role}. */
   assignments: Annotation({ reducer: mergeAssignments, default: () => [] }),
@@ -203,7 +203,7 @@ export const OrchestrationState = Annotation.Root({
   roleStates: Annotation({ reducer: mergeByIssue("issue"), default: () => [] }),
   /** Append-only mode/role telemetry records (labels and counters only). */
   modeTelemetry: Annotation({
-    reducer: (left = [], right = []) => [...left, ...(right ?? [])],
+    reducer: (/** @type {unknown[]} */ left = [], /** @type {unknown[]} */ right = []) => [...left, ...(right ?? [])],
     default: () => [],
   }),
   /**
@@ -214,7 +214,7 @@ export const OrchestrationState = Annotation.Root({
    */
   workerExecutions: Annotation({ reducer: mergeByIssue("issue"), default: () => [] }),
   gateResults: Annotation({
-    reducer: (left = [], right = []) => [...left, ...(right ?? [])],
+    reducer: (/** @type {unknown[]} */ left = [], /** @type {unknown[]} */ right = []) => [...left, ...(right ?? [])],
     default: () => [],
   }),
   /** Milestone event currently under integration-gate review, or null. */
@@ -222,16 +222,16 @@ export const OrchestrationState = Annotation.Root({
   /** Issues needing handoff: {issue, reason, proposedRoute?, invalidateAgent?}; null clears. */
   pendingInterrupted: Annotation({ reducer: mergeByIssue("issue"), default: () => [] }),
   retryCounts: Annotation({
-    reducer: (left = {}, right = {}) => ({ ...left, ...right }),
+    reducer: (/** @type {object} */ left = {}, /** @type {object} */ right = {}) => ({ ...left, ...right }),
     default: () => ({}),
   }),
   handoffCounts: Annotation({
-    reducer: (left = {}, right = {}) => ({ ...left, ...right }),
+    reducer: (/** @type {object} */ left = {}, /** @type {object} */ right = {}) => ({ ...left, ...right }),
     default: () => ({}),
   }),
   resumeFrom: Annotation({ reducer: (left, right) => right ?? left }),
   recoveryEvents: Annotation({
-    reducer: (left = [], right = []) => [...left, ...(right ?? [])],
+    reducer: (/** @type {unknown[]} */ left = [], /** @type {unknown[]} */ right = []) => [...left, ...(right ?? [])],
     default: () => [],
   }),
   lastEventError: Annotation(),
@@ -1687,6 +1687,7 @@ function gateRouter(state) {
 /* Graph                                                               */
 /* ------------------------------------------------------------------ */
 
+/** @param {{ checkpointer?: import("@langchain/langgraph-checkpoint").BaseCheckpointSaver }} [options] */
 export function buildOrchestrationGraph({ checkpointer } = {}) {
   const graph = new StateGraph(OrchestrationState)
     .addNode("load_config", loadConfigNode)
@@ -1720,7 +1721,7 @@ export function buildOrchestrationGraph({ checkpointer } = {}) {
     .addConditionalEdges("refresh_triage_routes", failOr("prepare_triage"))
     .addConditionalEdges("prepare_triage", failOr("resolve_triage"))
     .addConditionalEdges("resolve_triage", (state) => state.failureReason ? "fail_run" :
-      state.lastEventError?.startsWith("triage-") ? "resolve_triage" : "refresh_parent_usage")
+      /** @type {string | undefined} */ (state.lastEventError)?.startsWith("triage-") ? "resolve_triage" : "refresh_parent_usage")
     .addConditionalEdges("refresh_parent_usage", failOr("assign_routes"))
     .addConditionalEdges("refresh_handoff_parent_usage", failOr("select_handoff_route"))
     .addConditionalEdges("assign_routes", failOr("confirm_parent_assignments"))
@@ -1741,6 +1742,7 @@ export function buildOrchestrationGraph({ checkpointer } = {}) {
 /* Default side-effect implementations (injected, never checkpointed)  */
 /* ------------------------------------------------------------------ */
 
+/** @param {{ cwd: string, checkpointer?: import("./issue-graph-checkpointer.mjs").FileCheckpointSaver, threadId?: string }} options */
 export function createDefaultDeps({ cwd, checkpointer, threadId }) {
   let triageRunner;
   const runId = triageRunId(threadId);

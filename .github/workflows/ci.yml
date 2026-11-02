@@ -22,6 +22,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
       - name: Check managed and generated files
         run: node scripts/ai-template.mjs check
       - name: Run managed tests

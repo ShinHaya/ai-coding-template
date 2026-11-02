@@ -88,6 +88,8 @@ npm run lint
 
 ```bash
 # Typecheck command
+# Template scripts and tests: TypeScript checkJs over JSDoc (tsconfig.json), no emit.
+npm run typecheck
 ```
 
 ## 7. Implementation Conventions
@@ -117,6 +119,7 @@ Run the relevant checks before committing code:
 # lint
 npm run lint
 # typecheck
+npm run typecheck
 # test
 npm run test:orchestrator
 npm run test:e2e

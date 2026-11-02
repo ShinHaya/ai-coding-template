@@ -70,7 +70,7 @@ export const VALID_WASTE_REASON_CODES = new Set([
  */
 export const DEFAULT_TELEMETRY_CONFIG = Object.freeze({
   enabled: true,
-  sinkType: "jsonl", // "jsonl" | "sqlite" | "both" | "noop"
+  sinkType: /** @type {string} */ ("jsonl"), // "jsonl" | "sqlite" | "both" | "noop"
   telemetryDir: "state/telemetry",
   jsonlFileName: "events.jsonl",
   sqliteFileName: "telemetry.db",

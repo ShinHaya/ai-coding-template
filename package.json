@@ -9,6 +9,7 @@
   },
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc -p tsconfig.json",
     "test:orchestrator": "node scripts/ai-template.mjs test",
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "audit:check": "npm audit --audit-level=high"
@@ -18,8 +19,10 @@
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
     "@langchain/langgraph-checkpoint": "^1.1.3",
+    "@types/node": "^22.20.5",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
+    "typescript": "^7.0.2",
     "yaml": "^2.9.0"
   }
 }
