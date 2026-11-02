@@ -118,6 +118,10 @@ Run the relevant checks before committing code:
 npm run lint
 # typecheck
 # test
+npm run test:orchestrator
+npm run test:e2e
+# dependency audit
+npm run audit:check
 ```
 
 Rules:
@@ -133,6 +137,12 @@ Add a CI step that audits the **shipped** dependency surface and fails on new
 high/critical advisories, with Dependabot covering everything else as
 non-blocking PRs. The two-layer rationale, the audit command, and the triage /
 acceptance process live in [`dependency-security.md`](dependency-security.md).
+
+In the template itself, `npm run audit:check` audits **all** dependencies at
+`--audit-level=high` instead of using `--omit=dev`. Every template dependency is
+a devDependency, but `@langchain/*` and `yaml` are loaded at run time by the
+orchestration scripts that consumers receive, so they are part of the shipped
+surface. ESLint is the only build-time-only dependency and is audited as well.
 
 ## 9. Review
 
