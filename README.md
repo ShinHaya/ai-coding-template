@@ -50,7 +50,9 @@ npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
 ```
 
 `setup-hooks.sh` sets `git config --local core.hooksPath .githooks`, which
-applies to every worktree of the clone.
+applies to every worktree of the clone. If `core.hooksPath` already points
+elsewhere (for example, another hook manager), it stops without changing
+anything; inspect that setting and unset it before re-running.
 
 Required commands: `bash`, `git`, `jq`, and `gh`. Node.js (version in `.nvmrc`)
 is needed for orchestration, generation and worktree ownership operations. Recommended: `shellcheck`. Agent CLIs
