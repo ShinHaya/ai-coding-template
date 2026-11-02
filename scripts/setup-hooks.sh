@@ -5,8 +5,9 @@
 # .githooks/ contents are pulled fresh. It does the minimum:
 #
 #   1. verify required commands are available
-#   2. mark every hook executable
-#   3. point `git config core.hooksPath` at .githooks
+#   2. stop, changing nothing, if core.hooksPath points somewhere else
+#   3. mark every hook executable
+#   4. point `git config core.hooksPath` at .githooks
 #
 # The hooks themselves live in .githooks/ so they are tracked in git
 # and kept in sync across machines.
@@ -39,17 +40,24 @@ if [ "$missing" -gt 0 ]; then
   exit 1
 fi
 
-# --- 2. Make hook files executable -------------------------------
+# --- 2. Do not silently replace another hook configuration ------
+CURRENT=$(git config --local --get core.hooksPath 2>/dev/null || echo "")
+if [ -n "$CURRENT" ] && [ "$CURRENT" != ".githooks" ]; then
+  printf 'error: existing core.hooksPath = %s; inspect it before changing hooks\n' "$CURRENT" >&2
+  printf 'to use .githooks, run: git config --local --unset core.hooksPath, then re-run this script.\n' >&2
+  exit 1
+fi
+
+# --- 3. Make hook files executable -------------------------------
 find .githooks -type f \( -name 'pre-commit' -o -name '*.sh' \) \
   -exec chmod +x {} +
 
-# --- 3. Point git at the hooks dir -------------------------------
-CURRENT=$(git config --local --get core.hooksPath 2>/dev/null || echo "")
+# --- 4. Point git at the hooks dir -------------------------------
 if [ "$CURRENT" = ".githooks" ]; then
   printf 'core.hooksPath already set to .githooks\n'
 else
   git config --local core.hooksPath .githooks
-  printf 'set core.hooksPath = .githooks (was: %s)\n' "${CURRENT:-<unset>}"
+  printf 'set core.hooksPath = .githooks\n'
 fi
 
 printf '\nhooks installed. See AGENTS.md for repository quality gates.\n'
