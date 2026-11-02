@@ -209,24 +209,26 @@ export function createFakeTransport(answer) {
 function auditedTransport(fetchImpl, model, audit, clock) {
   return async (url, init) => {
     audit.requests += 1;
-    let request;
-    try {
-      request = JSON.parse(init.body);
-    } catch {
-      request = null;
+    // Block scope keeps the parsed request body out of the awaited call.
+    {
+      let request;
+      try {
+        request = JSON.parse(init.body);
+      } catch {
+        request = null;
+      }
+      const questions = Object.keys(request?.questions ?? {})
+        .sort()
+        .join(",");
+      if (
+        url !== JEV_ENDPOINT ||
+        init.method !== "POST" ||
+        init.redirect !== "error" ||
+        request?.model !== model ||
+        !["risk,size", "risk,route,size"].includes(questions)
+      )
+        audit.constraintViolations += 1;
     }
-    const questions = Object.keys(request?.questions ?? {})
-      .sort()
-      .join(",");
-    if (
-      url !== JEV_ENDPOINT ||
-      init.method !== "POST" ||
-      init.redirect !== "error" ||
-      request?.model !== model ||
-      !["risk,size", "risk,route,size"].includes(questions)
-    )
-      audit.constraintViolations += 1;
-    request = undefined;
     const started = clock();
     try {
       return await fetchImpl(url, init);

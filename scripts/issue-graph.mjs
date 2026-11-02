@@ -703,7 +703,8 @@ async function prepareTriageNode(state, config) {
         previous.result.issueUpdatedAt === revision.updatedAt && previous.inputModel === model &&
         previous.result.policyVersion === TRIAGE_POLICY && previous.decision.action !== "fallback") {
       const identity = { routeSetHash: context.routeSetHash, evidenceVersion: context.evidenceVersion };
-      const { preferredRoute: _discarded, ...decision } = previous.decision;
+      const decision = { ...previous.decision };
+      delete decision.preferredRoute;
       triageByIssue.push({ ...previous, decision: { ...decision, ...identity },
         result: { ...previous.result, ...identity, ...(previous.result.status === "recommended" ? { routeMap: {},
           route: { choice: "abstain", probabilities: { abstain: 1 }, confidence: 0 } } : {}) },
@@ -758,7 +759,7 @@ function resolveTriageNode(state) {
       raw.some((d) => !entries.some((e) => e.issue === d?.issue)))
     return { lastEventError: "triage-invalid-decision" };
   const updated = [];
-  let plan = { ...state.plan, runnable: [...state.plan.runnable] };
+  const plan = { ...state.plan, runnable: [...state.plan.runnable] };
   try {
     for (const entry of entries) {
       const context = { ...entry.result, model: entry.inputModel };
@@ -1268,7 +1269,11 @@ async function waitForEventsNode(state, config) {
       return {
         capabilities,
         pendingInterrupted: (state.pendingInterrupted ?? []).map(
-          ({ invalidateAgent: _consumed, ...entry }) => entry,
+          (entry) => {
+            const pending = { ...entry };
+            delete pending.invalidateAgent;
+            return pending;
+          },
         ),
       };
     } catch (error) {
@@ -1508,7 +1513,7 @@ function selectHandoffRouteNode(state) {
     const handoffRoleState = roleStateFor(state, entry.issue);
     const activeRole =
       handoffRoleState && handoffRoleState.status === "active" ? currentRole(handoffRoleState) : null;
-    let route = null;
+    let route;
     let degraded = null;
     if (entry.proposedRoute !== undefined) {
       route = resolveRoute(pool, entry.proposedRoute);

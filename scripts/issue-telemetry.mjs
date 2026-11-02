@@ -110,7 +110,8 @@ export function sanitizeTelemetryConfig(rawConfig = {}) {
  * Base Abstract / Interface for TelemetrySink.
  */
 export class TelemetrySink {
-  async emit(_event) {}
+  // Subclasses receive one telemetry event.
+  async emit() {}
   async readEvents() {
     return [];
   }
@@ -256,7 +257,7 @@ export class SqliteTelemetrySink extends TelemetrySink {
 
       const event = validateTelemetryEvent(rawEvent);
       // Properly quote and escape strings and numbers for sqlite3 CLI execution
-      const escapeSql = (str) => String(str).replace(/'/g, "''").replace(/\x00/g, "");
+      const escapeSql = (str) => String(str).replace(/'/g, "''").replaceAll("\0", "");
       const sql = `INSERT OR REPLACE INTO telemetry_events (event_id, correlation_id, occurred_at, event_type, issue_number, payload_json) VALUES ('${escapeSql(
         event.eventId
       )}', '${escapeSql(event.correlationId)}', '${escapeSql(

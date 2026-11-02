@@ -102,7 +102,7 @@ function pruneParents(root, file) {
 function localSkills(root) {
   let config;
   try { config = JSON.parse(fs.readFileSync(path.join(root, ".ai-template/config.json"), "utf8")); }
-  catch (error) { if (error.code === "ENOENT") return []; throw new Error("repository-config-invalid-json"); }
+  catch (error) { if (error.code === "ENOENT") return []; throw new Error("repository-config-invalid-json", { cause: error }); }
   const skills = config?.localSkills ?? [];
   if (!Array.isArray(skills) || skills.some(s => typeof s !== "string")) throw new Error("runtime-local-skill-invalid");
   return skills;
