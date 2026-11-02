@@ -47,6 +47,9 @@ find .githooks -type f \( -name 'pre-commit' -o -name '*.sh' \) \
 CURRENT=$(git config --local --get core.hooksPath 2>/dev/null || echo "")
 if [ "$CURRENT" = ".githooks" ]; then
   printf 'core.hooksPath already set to .githooks\n'
+elif [ -n "$CURRENT" ]; then
+  printf 'error: existing core.hooksPath is set to %s; unset it with git config --local --unset core.hooksPath before running this script\n' "$CURRENT" >&2
+  exit 1
 else
   git config --local core.hooksPath .githooks
   printf 'set core.hooksPath = .githooks (was: %s)\n' "${CURRENT:-<unset>}"
