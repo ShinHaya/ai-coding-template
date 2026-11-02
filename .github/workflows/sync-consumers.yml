@@ -1,0 +1,157 @@
+name: sync-consumers
+
+# Delivers managed template files to consumer repositories as one pull request
+# per consumer. Triggers are deliberately limited to push and manual dispatch;
+# never add pull_request_target here, because the job holds a write token.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ai-template.manifest.json
+      - sync/consumers.json
+      - agents/**
+      - config/**
+      - scripts/**
+      - skills/**
+      - tests/ai-template/**
+      - .claude/hooks/**
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Only sync this consumer (owner/name). Empty syncs every consumer."
+        type: string
+        default: ""
+      adopt:
+        description: "First adoption only: overwrite existing consumer files at managed paths."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    # Repositories created from this template have no App configured; skip there.
+    if: vars.AI_TEMPLATE_SYNC_APP_ID != ''
+    runs-on: ubuntu-latest
+    outputs:
+      consumers: ${{ steps.list.outputs.consumers }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Validate template and list consumers
+        id: list
+        env:
+          REPO: ${{ inputs.repo }}
+        run: |
+          node scripts/ai-template.mjs check
+          if [ -n "$REPO" ]; then
+            consumers=$(node scripts/ai-template.mjs consumers --repo "$REPO")
+          else
+            consumers=$(node scripts/ai-template.mjs consumers)
+          fi
+          printf 'consumers=%s\n' "$(printf '%s' "$consumers" | jq -c .)" >> "$GITHUB_OUTPUT"
+
+  sync:
+    needs: plan
+    if: needs.plan.outputs.consumers != '[]'
+    runs-on: ubuntu-latest
+    environment: template-sync
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJSON(needs.plan.outputs.consumers) }}
+    concurrency:
+      group: sync-consumers-${{ matrix.consumer.repo }}
+      cancel-in-progress: false
+    env:
+      REPO: ${{ matrix.consumer.repo }}
+      BASE: ${{ matrix.consumer.base }}
+      AUTO_MERGE: ${{ matrix.consumer.autoMerge }}
+      ADOPT: ${{ inputs.adopt == true }}
+      SYNC_BRANCH: ai-template/sync
+    steps:
+      - name: Split consumer owner and name
+        id: target
+        run: |
+          printf 'owner=%s\nname=%s\n' "${REPO%%/*}" "${REPO#*/}" >> "$GITHUB_OUTPUT"
+      - name: Create a token for this consumer only
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AI_TEMPLATE_SYNC_APP_ID }}
+          private-key: ${{ secrets.AI_TEMPLATE_SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ steps.target.outputs.owner }}
+          repositories: ${{ steps.target.outputs.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Check out template
+        uses: actions/checkout@v4
+        with:
+          path: template
+      - name: Check out consumer base
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.consumer.repo }}
+          ref: ${{ matrix.consumer.base }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: consumer
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: template/.nvmrc
+      - name: Sync managed files and regenerate
+        working-directory: consumer
+        run: |
+          adopt=()
+          if [ "$ADOPT" = "true" ]; then adopt=(--adopt); fi
+          node ../template/scripts/ai-template.mjs sync --from ../template \
+            --source-repository "$GITHUB_REPOSITORY" --pr-body "$RUNNER_TEMP/pr-body.md" "${adopt[@]}"
+          node scripts/ai-template.mjs generate
+          node scripts/ai-template.mjs check
+      - name: Commit, push and open or update the pull request
+        working-directory: consumer
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$REPO" --head "$SYNC_BRANCH" --base "$BASE" --state open --json number --jq '.[0].number // empty')
+          git add -A
+          if git diff --cached --quiet; then
+            echo "$REPO@$BASE already matches the template."
+            if [ -n "$pr" ]; then
+              gh pr close "$pr" --repo "$REPO" --delete-branch \
+                --comment "Closed automatically: \`$BASE\` already matches the template."
+            fi
+            exit 0
+          fi
+          user_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git -c user.name="${APP_SLUG}[bot]" -c user.email="${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" \
+            commit -q -m "chore: sync AI template files" -m "Source: $GITHUB_REPOSITORY@$GITHUB_SHA"
+          base_sha=$(git rev-parse HEAD^)
+          lease=""
+          if git fetch -q origin "refs/heads/$SYNC_BRANCH:refs/remotes/origin/$SYNC_BRANCH" 2>/dev/null; then
+            remote="refs/remotes/origin/$SYNC_BRANCH"
+            lease=$(git rev-parse "$remote")
+            if [ "$(git rev-parse "$remote^{tree}")" = "$(git rev-parse 'HEAD^{tree}')" ] \
+              && [ "$(git rev-parse "$remote^")" = "$base_sha" ]; then
+              echo "Sync branch is already up to date."
+              git reset -q --hard "$remote"
+            fi
+          fi
+          if [ "$(git rev-parse HEAD)" != "$lease" ]; then
+            # ai-template/sync is owned by this workflow; it is rebuilt from the base each run.
+            git push -q --force-with-lease="refs/heads/$SYNC_BRANCH:$lease" origin "HEAD:refs/heads/$SYNC_BRANCH"
+          fi
+          if [ -z "$pr" ]; then
+            pr=$(gh pr create --repo "$REPO" --base "$BASE" --head "$SYNC_BRANCH" \
+              --title "chore: sync AI template files" --body-file "$RUNNER_TEMP/pr-body.md")
+          else
+            gh pr edit "$pr" --repo "$REPO" --body-file "$RUNNER_TEMP/pr-body.md"
+          fi
+          if [ "$AUTO_MERGE" = "true" ]; then
+            gh pr merge "$pr" --repo "$REPO" --auto --squash
+          fi

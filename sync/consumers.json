@@ -1,0 +1,7 @@
+{
+  "$comment": "Repositories that receive sync pull requests from .github/workflows/sync-consumers.yml. `base` is the PR target branch; `autoMerge` enables auto-merge after required checks (default false).",
+  "consumers": [
+    { "repo": "soroeru/Soroeru", "base": "main", "autoMerge": false },
+    { "repo": "ShinHaya/oshishelf", "base": "develop", "autoMerge": false }
+  ]
+}

@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test:orchestrator": "node --test tests/ai-template/*.test.mjs"
+    "test:orchestrator": "node scripts/ai-template.mjs test"
   },
   "devDependencies": {
     "@langchain/core": "^1.2.3",

@@ -313,16 +313,15 @@ and hooks survive regeneration. OpenCode's runtime/skills/subagents are supporte
 its hook/plugin guard integration remains outside this Issue's scope.
 
 Commit `.ai-template/generated.json` with generated files. It records owned paths,
-hashes/link targets and hook entries, independently of the managed-file lock planned
-for the synchronization tool. Disabling/removing a definition deletes only unchanged
+hashes/link targets and hook entries, independently of the managed-file
+`.ai-template/lock.json` written by `sync`. Disabling/removing a definition deletes only unchanged
 owned outputs; edits/collisions and symlink parents fail before any output writes.
 Byte-identical generated outputs can be adopted safely. First adoption also
 recognizes unchanged legacy template files/links listed in
 `agents/legacy-generated.json`; differing consumer definitions require explicit
 migration in that consumer's adoption PR. Empty generated directories can remain.
 Generation is deterministic and can be rerun after interruption. It is not a
-transaction across all files. `sync`, `check`, managed tests and `lock.json` are
-implemented in the later synchronization phase.
+transaction across all files.
 
 ### Parent usage declarations
 
@@ -406,3 +405,52 @@ five-hour-only rule. A declared reader and `usageUnavailable` are mutually
 exclusive. Findings are scoped to the investigated versions, not a claim that
 no provider or future release can expose a usable query. Investigation evidence
 and the individual CLI responses are summarized in Issue #16 / PR #22.
+
+## Template synchronization
+
+This template is the single source for shared development files. Ownership is
+declared per path:
+
+- **managed**: paths matched by `ai-template.manifest.json` (template-only).
+  `*` matches within one path segment and `**` spans segments. Shared skills
+  are listed by name so repository-owned skills can live beside them under
+  `skills/`. `.ai-template/`, `.git` and `.github/workflows/` cannot be managed.
+- **generated**: outputs of `generate`, recorded in `.ai-template/generated.json`.
+- **repo-owned**: everything else, including `.ai-template/config.json`,
+  `AGENTS.md`, `docs/`, `package.json`, `.githooks/pre-commit` and CI.
+
+```bash
+# In a consumer checkout: copy managed files from a clean template checkout
+node /path/to/template/scripts/ai-template.mjs sync --from /path/to/template
+node scripts/ai-template.mjs generate
+# Detect drift (CI): managed edits, missing files and stale generated output
+node scripts/ai-template.mjs check
+# Run the managed test suite (tests/ai-template/*.test.mjs)
+node scripts/ai-template.mjs test
+```
+
+`sync` reads managed files from the template's Git index and fails when a
+managed path has uncommitted or untracked changes, so `.ai-template/lock.json`
+always names the commit whose bytes were copied. The lock records the source
+commit and each managed file's SHA-256 and executable bit. It contains no
+timestamps, so repeated syncs of one commit are byte-identical. Commit it with
+the synced files. All paths are validated before anything is written.
+
+- A file removed from the template is removed from the consumer, and emptied
+  parent directories are pruned.
+- A managed file edited or deleted in the consumer is restored to the
+  template's version and reported as drift. Fix managed files in the template
+  instead; `check` fails on such edits.
+- An existing consumer file with different content at a newly managed path
+  fails with `managed-collision`. `--adopt` overwrites it; use it only for a
+  reviewed first adoption. Paths under a configured `localSkills` name, and
+  destinations that are directories or symlinks, fail even with `--adopt`.
+- `--pr-body <file>` writes a Markdown summary (source range and paths, never
+  file contents); `--source-repository owner/name` records the source in the
+  lock and links the compare range.
+
+In the template itself, `check` also verifies that every manifest pattern
+matches a tracked regular file, that no managed path is a generated output, and
+that `sync/consumers.json` is valid. Template CI (`.github/workflows/ci.yml`)
+runs `check`, `test` and `scripts/test-issue-worktree.sh`. Delivery to consumers
+is described in [`github-operations.md`](github-operations.md) §13.

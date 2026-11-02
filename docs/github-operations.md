@@ -396,3 +396,68 @@ a manual assignment resumes. Running workers are preserved when usage falls.
 Only the closed decision/snapshot is reported; account IDs, plans, credentials,
 and raw responses must never enter state or logs. Admission is a point-in-time
 check because the parent and workers share quota.
+
+## 13. Template delivery to consumers
+
+`.github/workflows/sync-consumers.yml` delivers managed files from this
+template's `main` to each repository listed in `sync/consumers.json` as one pull
+request per consumer. It runs on pushes to `main` that touch managed candidate
+paths, and on manual `workflow_dispatch`. It never runs for pull requests, and
+`pull_request_target` must not be added.
+
+Per consumer, the workflow checks out the consumer's `base` branch, runs `sync`
+from the template, then the consumer's own `generate` and `check`. When nothing
+changed, it closes any stale sync pull request. Otherwise it rebuilds the fixed
+branch `ai-template/sync` from `base`. That branch is owned by the workflow and
+is force-updated with a lease; never push to it by hand. When the remote branch
+already has the same parent and tree, nothing is pushed. The single open
+pull request is created or its body updated with the source commit range and
+changed paths. Reruns therefore do not add pull requests or commits.
+
+### 13.1 Consumer list
+
+```json
+{ "consumers": [ { "repo": "owner/name", "base": "main", "autoMerge": false } ] }
+```
+
+Add a consumer with one entry. `base` is the pull request target, which may
+differ from the consumer's GitHub default branch. `autoMerge` defaults to
+`false`; keep the first two or three sync pull requests manually reviewed and
+merged, then set it to `true` per consumer to enable squash auto-merge after the
+consumer's required checks pass. Unknown keys, duplicate repositories and
+invalid branch names fail `check`.
+
+### 13.2 GitHub App setup (one time)
+
+`GITHUB_TOKEN` cannot write to other repositories, and pull requests it creates
+do not trigger CI, so delivery uses a GitHub App installation token.
+
+1. Create a GitHub App owned by the template owner. Disable webhooks. Grant only
+   repository permissions **Contents: Read and write** and **Pull requests: Read
+   and write** (Metadata: Read is implied). Do not grant Workflows permission;
+   `.github/workflows/` is never managed.
+2. Install the App only on the consumer repositories (select repositories, not
+   all). Install it once per owning account or organization.
+3. In this template repository, create the environment `template-sync`. Restrict
+   its deployment branches to `main` and, optionally, require reviewers.
+4. Add the App's private key as the environment secret
+   `AI_TEMPLATE_SYNC_APP_PRIVATE_KEY`, and its App ID as the repository variable
+   `AI_TEMPLATE_SYNC_APP_ID`. Without the variable the workflow is skipped, so
+   repositories created from this template do not try to deliver.
+
+Each matrix job requests a token scoped to the one consumer repository with
+only `contents: write` and `pull-requests: write`. The workflow's own
+`GITHUB_TOKEN` is read-only.
+
+### 13.3 First sync and consumer CI
+
+Run the first sync for each consumer manually from **Actions → sync-consumers →
+Run workflow**, optionally limiting `repo`, and inspect the pull request. Set
+`adopt` only when the consumer already holds older copies of managed files that
+should be replaced; review those overwrites in the pull request. Consumers should
+add `node scripts/ai-template.mjs check` as a required check, so direct edits to
+managed files fail with a pointer to the template. Emergency fixes also go
+through a template pull request.
+
+Merge a sync pull request that renames tooling state only while no
+orchestration is running in that consumer.
