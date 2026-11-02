@@ -93,6 +93,10 @@ function makeDeps(overrides = {}) {
   };
 }
 
+/**
+ * @param {{ items: Record<string, any>[], capabilities?: object[], config?: Record<string, any> }} options
+ * @returns {{ config: Record<string, any>, items: Record<string, any>[], capabilities: object[] }}
+ */ // any: free-form config and item overrides
 function makeInput({ items, capabilities = defaultCapabilities, config = {} }) {
   return {
     config: {
@@ -119,9 +123,10 @@ function makeRun({ deps = makeDeps(), checkpointer = new MemorySaver(), threadId
     deps,
     graph,
     config,
-    invoke: (input) => graph.invoke(input, config),
-    resume: (value) => graph.invoke(new Command({ resume: value }), config),
-    state: async () => (await graph.getState(config)).values,
+    // any: graph state and interrupt payloads are untyped channels
+    invoke: (input) => /** @type {Promise<Record<string, any>>} */ (graph.invoke(input, config)),
+    resume: (value) => /** @type {Promise<Record<string, any>>} */ (graph.invoke(new Command({ resume: value }), config)),
+    state: async () => /** @type {Record<string, any>} */ ((await graph.getState(config)).values),
   };
 }
 
@@ -2004,10 +2009,10 @@ test("the file checkpointer rejects malformed triage budget or attempt sections"
   const directory = await mkdtemp(path.join(tmpdir(), "graph-checkpoint-"));
   try {
     const format = "issue-graph-checkpoint/v1";
-    for (const [name, section] of [
+    for (const [name, section] of /** @type {[string, object][]} */ ([
       ["attempts.json", { triageAttempts: { run: "not-a-list" } }],
       ["budgets.json", { triageBudgets: { run: 3 } }],
-    ]) {
+    ])) {
       const file = path.join(directory, name);
       await writeFile(file, JSON.stringify({ format, storage: {}, writes: {}, ...section }));
       await assert.rejects(FileCheckpointSaver.load(file), /checkpoint-file-corrupt/);

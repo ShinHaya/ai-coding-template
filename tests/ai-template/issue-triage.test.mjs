@@ -109,7 +109,7 @@ test("the previous policy cannot be sent under the new classifier", async () => 
   assert.equal(fetched, false);
 });
 
-for (const [name, change, reason] of [
+for (const [name, change, reason] of /** @type {[string, object, string][]} */ ([
   ["private", { isPrivate: true }, "input-not-approved"],
   ["unknown visibility", { isPrivate: undefined }, "input-not-approved"],
   ["edited", { updatedAt: "2026-09-27T00:00:00Z" }, "stale-input"],
@@ -118,7 +118,7 @@ for (const [name, change, reason] of [
   ["credential", { body: "password=fake-test-password" }, "sensitive-input"],
   ["phone", { body: "000-0000-0000" }, "sensitive-input"],
   ["oversized", { body: "文".repeat(9000) }, "input-too-large"],
-])
+]))
   test(`preflight rejects ${name} without external request`, async () => {
     let sent = 0;
     const result = await evaluateTriage(
@@ -159,13 +159,13 @@ test("off, assisted and absent key avoid even the issue-text fetch", async () =>
   }
 });
 
-for (const [status, reason] of [
+for (const [status, reason] of /** @type {[number, string][]} */ ([
   [401, "auth-failed"],
   [403, "auth-failed"],
   [429, "rate-limited"],
   [529, "rate-limited"],
   [500, "provider-error"],
-])
+]))
   test(`HTTP ${status} returns closed reason with no retries or error text`, async () => {
     let calls = 0;
     const result = await evaluateTriage(
@@ -752,7 +752,7 @@ test("explicit private opt-in classifies fictional private Issue text inside the
   assert.doesNotMatch(JSON.stringify(result), /Change fixture wording|Update a local help message|fake-secret/);
 });
 
-for (const [name, change, reason] of [
+for (const [name, change, reason] of /** @type {[string, object, string][]} */ ([
   ["unknown visibility", { isPrivate: undefined }, "input-not-approved"],
   ["changed revision", { updatedAt: "2026-09-27T00:00:00Z" }, "stale-input"],
   ["password", { body: '"password": "fake-private-password"' }, "sensitive-input"],
@@ -761,7 +761,7 @@ for (const [name, change, reason] of [
   ["token", { body: "token=fake-private-token" }, "sensitive-input"],
   ["personal email", { body: "fake.person@example.invalid" }, "sensitive-input"],
   ["oversized", { body: "文".repeat(9000) }, "input-too-large"],
-]) test(`private opt-in does not bypass ${name}`, async () => {
+])) test(`private opt-in does not bypass ${name}`, async () => {
   let sent = 0;
   const result = await evaluateTriage(input, { ...config, allowPrivateIssues: true }, dependencies({
     fetchIssue: async () => ({ ...disclosure, isPrivate: true, ...change }),

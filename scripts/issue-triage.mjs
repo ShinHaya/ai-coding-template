@@ -132,7 +132,12 @@ async function boundedResponse(response) {
   }
 }
 
-/** Runs only in the isolated child in production; injected boundaries serve offline tests. */
+/**
+ * Runs only in the isolated child in production; injected boundaries serve offline tests.
+ * @param {unknown} rawInput
+ * @param {unknown} rawConfig
+ * @param {{ env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, fetchIssue?: typeof fetchIssueForTriage, signal?: AbortSignal, now?: number, requestTimeoutMs?: number }} [options]
+ */
 export async function evaluateTriage(
   rawInput,
   rawConfig,

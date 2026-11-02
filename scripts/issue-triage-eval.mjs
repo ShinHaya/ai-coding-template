@@ -160,6 +160,7 @@ const KEYWORD_GROUPS = {
   personal:
     /個人|住所|電話|カード|CVV|マイナンバー|氏名|契約者|復号|personal|address|card|profile|decrypted|birth|ledger rows/i,
 };
+/** @type {[string, RegExp][]} */
 const SIZE_RULES = [
   ["XS", /誤字|typo|リンク切れ|anchor|文言|wording|copyright|キャプション|章番号|色トークン/i],
   ["XL", /段階|stages|multiple PRs|複数 PR|backend|service|relay|全サイト定義/i],
@@ -251,6 +252,8 @@ const projectDistribution = ({ choice, probabilities, confidence }) => ({
 /**
  * Evaluate one split (or all) sequentially — one request in flight, as in production.
  * `transport` is a fetch-compatible function; `apiKey` reaches only evaluateTriage.
+ * @param {*} dataset
+ * @param {{ split?: string, transport?: typeof fetch, transportKind?: string, apiKey?: string, now?: number, clock?: () => number, maxRequests?: number }} [options]
  */
 export async function runTriageEvaluation(
   dataset,
@@ -319,7 +322,7 @@ export async function runTriageEvaluation(
             size: projectDistribution(result.size),
             disposition: result.disposition,
           }),
-      usage: usage === "unavailable" ? "unavailable" : { ...usage },
+      usage: usage === "unavailable" ? "unavailable" : { .../** @type {object} */ (usage) },
     });
   }
   return {
