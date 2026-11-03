@@ -5,8 +5,6 @@ import { REASON_CODES, isRetiredRuntimeRoute } from "./shared.mjs";
 export function getRuntimeAdapters(root = process.cwd()) {
   return loadRuntimeRegistry(root).enabled.map(createAdapter);
 }
-// Compatibility export for callers inspecting this process's default registry.
-export const RUNTIME_ADAPTERS = Object.freeze(getRuntimeAdapters());
 export function getAdapter(agentName, root = process.cwd()) {
   const runtime = findRuntime(agentName, root, { enabledOnly: true });
   return runtime ? createAdapter(runtime) : null;
