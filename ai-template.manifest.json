@@ -21,6 +21,7 @@
     "skills/handoff-issue/**",
     "skills/issue-implementation/**",
     "skills/orchestrate-issues-implementation/**",
+    "skills/refresh-model-catalog/**",
     "skills/requirements-review/**",
     "skills/writing-good-tests/**",
     "tests/ai-template/**"

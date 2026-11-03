@@ -196,7 +196,11 @@ Coordinate several Issues with
 
 ```bash
 npm ci
-# Discover verified routes from enabled runtime definitions
+# Refresh the local model catalog (lists models; never executes one)
+node scripts/issue-model-catalog.mjs refresh
+# Show the stored catalog, each model's policy, and which runtimes are stale
+node scripts/issue-model-catalog.mjs show
+# Discover verified routes (re-lists the catalog, then probes each candidate)
 node scripts/issue-capabilities.mjs
 # Plan explicit Issues without writing anything
 node scripts/issue-orchestrator.mjs --issues 12,13 --dry-run \
@@ -221,8 +225,16 @@ enable it for Issues that contain secrets or personal data.
 
 <!-- Document local state, migrations, generated files, and manual setup. -->
 
-- `state/` holds local-only state (orchestrator run state, capability cache,
-  runtime config copies, triage evaluation records) and is git-ignored.
+- `state/` holds local-only state (orchestrator run state, model catalog,
+  capability cache, runtime config copies, triage evaluation records) and is
+  git-ignored.
+- `state/model-catalog.json` is the model list each enabled runtime's CLI
+  reports (model IDs, labels, CLI path/version, timestamps, closed reason codes
+  only). Orchestration runs re-list a runtime when its entry is missing, failed,
+  older than `run.modelCatalog.maxAgeHours` (default 168 = one week), or its CLI
+  path/`--version` changed; `--refresh-catalog` forces it. Only runtimes whose
+  candidate list changed are re-probed. The `refresh-model-catalog` skill
+  refreshes on demand and reports the diff.
 - Issue worktree lifecycle metadata lives under the shared Git common directory
   (`.git/issue-worktrees/`), not in the worktree.
 - `.worktrees/` holds per-Issue agent worktrees and is git-ignored.
@@ -306,15 +318,34 @@ handoff, but cannot be discovered, selected or launched. `--agent` accepts regis
 aliases and stores canonical IDs. Retired definitions also block old command
 aliases in cached/explicit selectors. Node is required for these identity checks.
 
-`agents.models.<id>.allow` optionally restricts an enabled runtime to an exact
-list of canonical model IDs; keys must be enabled runtime IDs. Models outside
-the list are never probed (diagnostic `model-not-allowed`) and are rejected from
-cached or explicit capabilities, route selection, dispatch verification and
-launch. Matching is exact: no wildcards, suffixes or case folding. Allowlists
-are part of the registry fingerprint, so editing one invalidates capability
-caches. An empty list admits no model for that runtime.
+`agents.models.<id>` holds an optional model policy for an enabled runtime; keys
+must be enabled runtime IDs and each entry needs `allow`, `deny` or both.
 
-This repository's own `.ai-template/config.json` disables Gemini and allows only
+- `allow` restricts the runtime to an exact list of catalog values (the value
+  passed to `--model`). Matching is exact: no wildcards, suffixes or case
+  folding. An empty list admits no model for that runtime. Models outside the
+  list are never probed (diagnostic `model-not-allowed`).
+- `deny` lists case-insensitive patterns where `*` is the only wildcard. It
+  matches the catalog value, its label, and the canonical model a probe
+  reports, and wins over `allow`. Denied models are never probed or routed
+  (diagnostic `model-denied`), so later versions of a denied family stay
+  excluded without editing the list.
+
+Both are rejected from cached or explicit capabilities, route selection,
+dispatch verification and launch, and both are part of the registry
+fingerprint, so editing one invalidates capability caches.
+
+Runtimes whose definition sets `models.resolveReportedModel` (Claude) list
+aliases such as `sonnet`. The probe must then report exactly one canonical model
+(otherwise `model-unresolved`); the route records that canonical `model` and the
+alias as `requestedModel`, and `allow` matches the alias. Claude's list comes
+from the CLI's control-protocol `initialize` response, not from local usage
+history.
+
+This repository's own `.ai-template/config.json` restricts Claude to the
+latest-generation aliases `opus`, `sonnet` and `haiku`, and denies Claude
+`*fable*` and Codex `*astra*` for cost (Product Owner decision, 2026-11-03,
+Issue #47). It also disables Gemini and allows only
 OpenCode Zen free models whose provider states zero retention and no training
 use: `opencode/glm-5.3-flash-free` and `opencode/deepseek-v4.1-flash-free`
 (per https://opencode.ai/docs/zen, checked 2026-11-03). Free models that may

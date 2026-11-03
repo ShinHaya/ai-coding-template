@@ -161,6 +161,8 @@ Repository-local Agent Skills live under `skills/` (see
 - `handoff-issue`: resume an existing Issue worktree after an interruption
 - `orchestrate-issues-implementation`: coordinate several Issues with dependency order,
   run-time agent/model routing, and role programs
+- `refresh-model-catalog`: refresh the local model catalog that supplies model
+  candidates, report what changed, and propose model-policy edits
 - `requirements-review` / `architecture-review` / `design-doc-review`: the
   documentation review criteria (results go in the Issue/PR)
 - `writing-good-tests`: how to write a test (the *what to test* strategy stays
