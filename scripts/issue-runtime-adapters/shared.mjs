@@ -543,6 +543,14 @@ export function spawnWorker(command, args, { timeoutMs, env = process.env, cwd }
 const NO_STATE_LEAK_RULE =
   "Do not store credentials, Issue bodies, prompts, diffs, or model response bodies in orchestrator run state.";
 
+// issue-implementation (and handoff-issue, which continues its workflow)
+// dispatches its own reviewer before the PR. Under a role program the
+// orchestrator already runs the one review pass per Issue as a separate role,
+// so an implementer that also followed the skill would review the Issue twice
+// on a route the run state never records.
+const SKIP_SKILL_REVIEW_RULE =
+  "Do NOT dispatch a reviewer role or run the skill's review step yourself: the orchestrator runs the review as a separate role. Go straight to push and pull request handling.";
+
 /**
  * Role-specific instructions. Each role runs as its own CLI process, so a
  * later role cannot see an earlier role's conversation — it reads the Issue,
@@ -578,6 +586,7 @@ function roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }) {
     return [
       `Address the reviewer's findings for this Issue (fix cycle ${fixCycle}). A pull request already exists.`,
       `Use the repository ${skill} skill to resume the existing Issue worktree.`,
+      SKIP_SKILL_REVIEW_RULE,
       `Read the findings with \`gh pr view --comments\`: take the newest comment whose first line starts with \`role=reviewer\`.`,
       "Do NOT create a pull request — push to the same branch so the existing one updates.",
       `After pushing, post ONE pull request comment starting with the exact line \`role=implementer fix-cycle=${fixCycle}\`, stating per finding what you changed or why you did not.`,
@@ -585,6 +594,7 @@ function roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }) {
     ];
   return [
     `Implement exactly one GitHub Issue using the repository ${skill} skill.`,
+    SKIP_SKILL_REVIEW_RULE,
     "Report role-complete with role=implementer once the work is committed, pushed, and the pull request exists.",
   ];
 }

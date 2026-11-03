@@ -92,6 +92,14 @@ Follow this workflow:
    `same-route-reviewer:*` in the PR description. If route discovery fails,
    state that clearly and proceed without a reviewer pass; record this exception
    in the PR description.
+
+   **Role-program exception:** skip this whole step when you were dispatched as
+   the `implementer` role of an orchestrator role program (the prompt has a
+   `Role: implementer` line). The orchestrator runs the one review pass per
+   Issue as a separate reviewer role after the PR exists, so dispatching a
+   reviewer here would review the Issue twice. Go straight to step 5 and do not
+   claim a reviewer verdict in the PR description. Single-worker dispatches (no
+   `Role:` line) and direct human use of this skill keep this step.
 5. Push the branch to GitHub and create a PR with
    `gh pr create --base <baseBranch>`, using the configured branch resolved in
    step 2 even when GitHub has a different default branch. Include
