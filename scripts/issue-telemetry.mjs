@@ -155,11 +155,30 @@ export class JsonlTelemetrySink extends TelemetrySink {
   async _rotate() {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const rotatedPath = path.join(
-        this.config.telemetryDir,
-        `${this.config.jsonlFileName}.${timestamp}`
-      );
-      await fs.rename(this.filePath, rotatedPath);
+      const prefix = `${this.config.jsonlFileName}.`;
+      const archives = (await fs.readdir(this.config.telemetryDir))
+        .filter((file) => file.startsWith(prefix) &&
+          /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?:\.\d+)?$/.test(file.slice(prefix.length)))
+        .sort((a, b) => a.localeCompare(b));
+      const latest = archives.at(-1)?.slice(prefix.length);
+      // Preserve lexical chronology even after a restart or a clock rollback.
+      const stamp = latest && latest.slice(0, timestamp.length) > timestamp
+        ? latest.slice(0, timestamp.length) : timestamp;
+      let sequence = latest?.startsWith(stamp)
+        ? BigInt(latest.slice(stamp.length + 1) || "0") + 1n : 0n;
+      while (true) {
+        const suffix = sequence === 0n ? "" : `.${String(sequence).padStart(16, "0")}`;
+        const rotatedPath = path.join(this.config.telemetryDir, `${prefix}${stamp}${suffix}`);
+        try {
+          // link is atomic and refuses to overwrite an existing archive.
+          await fs.link(this.filePath, rotatedPath);
+          break;
+        } catch (err) {
+          if (err.code !== "EEXIST") throw err;
+          sequence += 1n;
+        }
+      }
+      await fs.unlink(this.filePath);
 
       // Prune old rotated files if exceeding rotationMaxFiles (oldest first by name)
       const files = await fs.readdir(this.config.telemetryDir);

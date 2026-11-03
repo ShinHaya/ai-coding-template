@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   aggregateTokenUsage,
@@ -89,9 +90,9 @@ test("records closed duplicate, abandoned, timeout, and failed-handoff waste rea
   );
 });
 
-test("JsonlTelemetrySink emits, rotates, and reads events", async () => {
-  const testDir = path.join(process.cwd(), "tmp-test-telemetry-jsonl");
-  await rm(testDir, { recursive: true, force: true });
+test("JsonlTelemetrySink emits, rotates, and reads events", async (t) => {
+  const testDir = await mkdtemp(path.join(tmpdir(), "telemetry-jsonl-"));
+  t.after(() => rm(testDir, { recursive: true, force: true }));
 
   const sink = new JsonlTelemetrySink({
     telemetryDir: testDir,
@@ -111,9 +112,34 @@ test("JsonlTelemetrySink emits, rotates, and reads events", async () => {
   await rm(testDir, { recursive: true, force: true });
 });
 
-test("SqliteTelemetrySink or non-blocking fallback emits and reads events", async () => {
-  const testDir = path.join(process.cwd(), "tmp-test-telemetry-sqlite");
-  await rm(testDir, { recursive: true, force: true });
+test("JSONL preserves same-millisecond rotations across restarts and prunes oldest first", async (t) => {
+  const testDir = await mkdtemp(path.join(tmpdir(), "telemetry-rotation-"));
+  t.after(() => rm(testDir, { recursive: true, force: true }));
+  const events = await fixture("valid-v1.json");
+  const first = { ...events[0], eventId: "legacy" };
+  const timestamp = "2026-11-02T00:00:00.000Z";
+  // Include a pre-upgrade archive to verify compatibility with existing names.
+  await writeFile(path.join(testDir, "events.jsonl.2026-11-02T00-00-00-000Z"), `${JSON.stringify(first)}\n`);
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse(timestamp) });
+  const emitted = [first];
+  for (let index = 0; index < 14; index += 1) {
+    if (index === 12) t.mock.timers.setTime(Date.parse(timestamp) - 1_000);
+    // Reconstructing the sink rules out relying on an in-memory counter alone.
+    const sink = new JsonlTelemetrySink({ telemetryDir: testDir, maxFileSizeBytes: 1, rotationMaxFiles: 20 });
+    const event = { ...events[0], eventId: `same-time-${index}` };
+    emitted.push(event);
+    await sink.emit(event);
+    assert.deepEqual(await sink.readEvents(), emitted);
+  }
+  const sink = new JsonlTelemetrySink({ telemetryDir: testDir, maxFileSizeBytes: 1, rotationMaxFiles: 2 });
+  const last = { ...events[0], eventId: "last" };
+  await sink.emit(last);
+  assert.deepEqual(await sink.readEvents(), [...emitted.slice(-2), last]);
+});
+
+test("SqliteTelemetrySink or non-blocking fallback emits and reads events", async (t) => {
+  const testDir = await mkdtemp(path.join(tmpdir(), "telemetry-sqlite-"));
+  t.after(() => rm(testDir, { recursive: true, force: true }));
 
   const sink = new SqliteTelemetrySink({
     telemetryDir: testDir,
