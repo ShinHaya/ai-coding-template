@@ -1,0 +1,19 @@
+{
+  "$schema": "../agents/config.schema.json",
+  "agents": {
+    "enabled": [
+      "claude",
+      "codex",
+      "grok",
+      "opencode"
+    ],
+    "models": {
+      "opencode": {
+        "allow": [
+          "opencode/deepseek-v4.1-flash-free",
+          "opencode/glm-5.3-flash-free"
+        ]
+      }
+    }
+  }
+}
