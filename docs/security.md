@@ -40,6 +40,23 @@ stateful features (prompt caching, stored threads, memory) are permitted. -->
 
 <!-- Every allowed egress target and why it is allowed. -->
 
+### Read-only cloud observation
+
+A repository that deploys to a cloud provider investigates a failed deploy
+with a keyless read-only identity. Operators impersonate it and receive a
+short-lived token. The identity must not read secret values, datastore
+documents, analytics rows, storage objects, or data-access audit logs. Do not
+grant a role that includes those reads. On GCP,
+`roles/iam.securityReviewer` is one such role. Do not create a
+service-account key. Do not write tokens, secret values, or cloud logs to CI
+logs or the repository. The operator's own credentials remain on the machine,
+so write commands still require approval.
+
+This template has no cloud project. The procedure is
+[`cloud-observer.md`](../skills/issue-implementation/references/cloud-observer.md)
+and the `Deploy failure diagnosis` section of
+[`development.md`](development.md).
+
 ## 7. Input And DOM Safety
 
 <!-- How externally-supplied data is validated and escaped at each boundary. -->
@@ -59,5 +76,7 @@ Run before a release, and whenever a change touches an item above:
 - [ ] No new telemetry, analytics, or crash reporting
 - [ ] Dependency audit gate green, or every finding triaged and recorded
 - [ ] Permission bits on state files and directories are as intended
+- [ ] Cloud investigation uses the read-only observer; no service-account key
+      files; CI does not print cloud logs or tokens
 
 <!-- Add project-specific checklist items. -->

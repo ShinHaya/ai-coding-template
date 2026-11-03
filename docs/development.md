@@ -221,6 +221,32 @@ to the external TypeSafe classification API (`TYPESAFE_API_KEY`); private
 repositories additionally require `run.triage.allowPrivateIssues: true`. Never
 enable it for Issues that contain secrets or personal data.
 
+## Deploy failure diagnosis
+
+This template does not deploy cloud infrastructure and has no observer
+identity. The heading is the stable place a consumer records its own
+read-only command. `skills/issue-implementation` is template-managed and
+links here. This document is repo-owned, so a template sync does not replace
+the consumer's command.
+
+When a Cloud deploy or infrastructure-as-code apply fails, do not conclude
+from the CI log alone. Run only the read-only command recorded in this
+section, with the observer identity it names. If this section records no
+command, stop. Do not invent a provider command and do not use a broader
+operator identity.
+
+A consumer that deploys adds, in this section, the diagnose command, the
+observer configuration name, and a note that fixes go through its IaC unless
+the Product Owner asks for a manual change. Principles, the
+GCP example, the diagnostic output contract, the permission check, and the
+public-CI `::error::` step are in
+[`cloud-observer.md`](../skills/issue-implementation/references/cloud-observer.md).
+
+Do not add `cloud.observerConfig` or `cloud.diagnoseCommand` to
+`.ai-template/config.json`. Repository settings accept only `baseBranch`,
+`qualityGates`, and `documents`. Keep the command in this document and point
+at it from `AGENTS.md`.
+
 ## 11. Operational Notes
 
 <!-- Document local state, migrations, generated files, and manual setup. -->
