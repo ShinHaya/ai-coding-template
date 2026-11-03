@@ -453,6 +453,9 @@ test("real child fetch keeps private body and gh stderr out of parent", async (t
   );
   const result = await runTriageChild(input, config, {
     env: { PATH: dir, TYPESAFE_API_KEY: "fake-test-key", GITHUB_REPOSITORY: "example-org/example-repo" },
+    // Give the real processes time to start under load; production defaults stay unchanged.
+    timeoutMs: 120_000,
+    fetchTimeoutMs: 90_000,
   });
   assert.equal(result.result.reason, "input-not-approved");
   assert.doesNotMatch(JSON.stringify(result), /fake-private|fake-test-key/);

@@ -96,7 +96,7 @@ export function triageClassifierFingerprint() {
   })).digest("hex");
 }
 
-async function fetchIssueForTriage(issue, { signal, env }) {
+async function fetchIssueForTriage(issue, { signal, env, timeoutMs }) {
   const query = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){isPrivate issue(number:$number){title body updatedAt}}}`;
   const githubEnv = { ...env };
   delete githubEnv.TYPESAFE_API_KEY;
@@ -104,7 +104,7 @@ async function fetchIssueForTriage(issue, { signal, env }) {
   const { stdout } = await execFileAsync(
     "gh",
     ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `number=${issue}`],
-    { encoding: "utf8", maxBuffer: RESPONSE_LIMIT, timeout: 4_000, signal, env: githubEnv },
+    { encoding: "utf8", maxBuffer: RESPONSE_LIMIT, timeout: timeoutMs, signal, env: githubEnv },
   );
   const parsed = JSON.parse(stdout);
   if (parsed.errors) throw new Error("fetch-failed");
@@ -136,7 +136,7 @@ async function boundedResponse(response) {
  * Runs only in the isolated child in production; injected boundaries serve offline tests.
  * @param {unknown} rawInput
  * @param {unknown} rawConfig
- * @param {{ env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, fetchIssue?: typeof fetchIssueForTriage, signal?: AbortSignal, now?: number, requestTimeoutMs?: number }} [options]
+ * @param {{ env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, fetchIssue?: typeof fetchIssueForTriage, signal?: AbortSignal, now?: number, requestTimeoutMs?: number, fetchTimeoutMs?: number }} [options]
  */
 export async function evaluateTriage(
   rawInput,
@@ -148,6 +148,7 @@ export async function evaluateTriage(
     signal,
     now = Date.now(),
     requestTimeoutMs = 5_000,
+    fetchTimeoutMs = 4_000,
   } = {},
 ) {
   const input = normalizeTriageInput(rawInput);
@@ -165,7 +166,7 @@ export async function evaluateTriage(
   {
     let disclosure;
     try {
-      disclosure = await fetchIssue(input.issue, { signal, env });
+      disclosure = await fetchIssue(input.issue, { signal, env, timeoutMs: fetchTimeoutMs });
     } catch {
       return fallback(signal?.aborted ? "cancelled" : "fetch-failed");
     }
@@ -233,10 +234,12 @@ async function main() {
     if (bytes > 128 * 1024) throw new Error("invalid-input");
     chunks.push(chunk);
   }
-  const { input, config } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const { input, config, timeoutMs = 10_000, fetchTimeoutMs = 4_000 } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   if (String(input?.issue) !== process.argv[2]) throw new Error("invalid-input");
-  const signal = AbortSignal.timeout(10_000);
-  const response = await evaluateTriage(input, config, { signal });
+  if (![timeoutMs, fetchTimeoutMs].every((value) => Number.isSafeInteger(value) && value >= 1 && value <= 120_000))
+    throw new Error("invalid-input");
+  const signal = AbortSignal.timeout(timeoutMs);
+  const response = await evaluateTriage(input, config, { signal, fetchTimeoutMs });
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

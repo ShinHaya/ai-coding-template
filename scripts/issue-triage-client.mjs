@@ -17,13 +17,15 @@ const safeEnv = (env) =>
 /**
  * @param {unknown} rawInput
  * @param {unknown} rawConfig
- * @param {{ env?: NodeJS.ProcessEnv, signal?: AbortSignal, timeoutMs?: number }} [options]
+ * @param {{ env?: NodeJS.ProcessEnv, signal?: AbortSignal, timeoutMs?: number, fetchTimeoutMs?: number }} [options]
  */
-export function runTriageChild(rawInput, rawConfig, { env = process.env, signal, timeoutMs = 10_000 } = {}) {
+export function runTriageChild(rawInput, rawConfig, { env = process.env, signal, timeoutMs = 10_000, fetchTimeoutMs = 4_000 } = {}) {
   const input = normalizeTriageInput(rawInput);
   const config = normalizeTriageConfig(rawConfig);
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10_000)
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000)
     throw new Error("triage-invalid-timeout");
+  if (!Number.isSafeInteger(fetchTimeoutMs) || fetchTimeoutMs < 1 || fetchTimeoutMs > 120_000)
+    throw new Error("triage-invalid-fetch-timeout");
   const context = triageContext(input);
   const fallback = (reason) => ({ result: fallbackResult(context, reason), usage: "unavailable" });
   if (signal?.aborted) return Promise.resolve(fallback("cancelled"));
@@ -74,7 +76,7 @@ export function runTriageChild(rawInput, rawConfig, { env = process.env, signal,
         finish(fallback("invalid-response"));
       }
     });
-    child.stdin.end(JSON.stringify({ input, config }));
+    child.stdin.end(JSON.stringify({ input, config, timeoutMs, fetchTimeoutMs }));
   });
 }
 function cleanUsage(raw) {
