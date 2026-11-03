@@ -48,6 +48,7 @@ Use `issue-implementation` instead when the Issue worktree and branch have not b
     omitted locations, follow this repository's `AGENTS.md`. Use the same configured
     base branch for freshness checks, diffs and the PR target.
 12. Summarize current state, inherited changes, unresolved findings, remaining work, and risks to the user. Then continue the Issue workflow in the same worktree.
+    When dispatched as the `implementer` role of an orchestrator role program (the prompt has a `Role: implementer` line), skip the `issue-implementation` reviewer step: the orchestrator runs the review as a separate role. Single-worker and human-driven handoffs keep it.
 
 ## Stop Conditions
 

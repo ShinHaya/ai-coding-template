@@ -421,6 +421,54 @@ test("the first implementer pass still creates the pull request", () => {
   assert.equal(prompt.includes("fix-cycle"), false);
 });
 
+// The orchestrator owns the one review pass per Issue. An implementer that
+// also followed the skill's own reviewer step would review the Issue twice.
+const SKIP_SKILL_REVIEW = /Do NOT dispatch a reviewer role/;
+
+test("a role-program implementer is told to skip the skill's reviewer step", () => {
+  for (const { skill, fixCycle } of [
+    { skill: "issue-implementation", fixCycle: undefined },
+    { skill: "handoff-issue", fixCycle: undefined },
+    { skill: "handoff-issue", fixCycle: 1 },
+  ]) {
+    const prompt = buildWorkerPrompt({
+      issueNumber: 482,
+      agent: "Claude",
+      model: "sonnet",
+      releasePolicy: "merged",
+      nextMilestone: "pr-created",
+      role: "implementer",
+      skill,
+      fixCycle,
+    });
+    assert.match(prompt, SKIP_SKILL_REVIEW, `${skill} fixCycle=${fixCycle}`);
+    assert.match(prompt, /orchestrator runs the review as a separate role/);
+  }
+});
+
+test("single-worker and non-implementer prompts keep the skill's own review", () => {
+  const singleWorker = buildWorkerPrompt({
+    issueNumber: 482,
+    agent: "Codex",
+    model: "gpt-5",
+    releasePolicy: "merged",
+    nextMilestone: "pr-created",
+  });
+  assert.doesNotMatch(singleWorker, SKIP_SKILL_REVIEW);
+  for (const role of ["planner", "reviewer"]) {
+    const prompt = buildWorkerPrompt({
+      issueNumber: 482,
+      agent: "Codex",
+      model: "gpt-5",
+      releasePolicy: "merged",
+      nextMilestone: "pr-created",
+      role,
+      skill: "issue-implementation",
+    });
+    assert.doesNotMatch(prompt, SKIP_SKILL_REVIEW, role);
+  }
+});
+
 test("fixCycle reaches the dispatch payload only for a fixing implementer", () => {
   const base = {
     issueNumber: 482,

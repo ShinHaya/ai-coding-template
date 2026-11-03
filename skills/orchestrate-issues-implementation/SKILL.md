@@ -64,6 +64,8 @@ continues on a shared route and records `same-route-reviewer:*`. The first imple
 to enter an Issue creates the worktree via `issue-implementation`; later implementation roles
 resume it via `handoff-issue`. **A reviewer runs no skill at all** — both implementation skills
 commit, so it enters the existing worktree read-only.
+An implementer role skips the skills' own reviewer step — its prompt says so explicitly — so
+the reviewer role is the Issue's only review; `--single-worker` keeps the in-skill review.
 
 Review is bounded to one pass per Issue: a
 `NEEDS_REVISION` verdict buys one implementer fix pass that is **not** re-reviewed — the Issue
