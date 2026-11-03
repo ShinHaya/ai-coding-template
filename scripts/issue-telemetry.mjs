@@ -170,15 +170,22 @@ export class JsonlTelemetrySink extends TelemetrySink {
         const suffix = sequence === 0n ? "" : `.${String(sequence).padStart(16, "0")}`;
         const rotatedPath = path.join(this.config.telemetryDir, `${prefix}${stamp}${suffix}`);
         try {
-          // link is atomic and refuses to overwrite an existing archive.
-          await fs.link(this.filePath, rotatedPath);
+          // Reserve the name without overwriting an archive, then move the
+          // active file atomically. Never leave an archive linked to the active inode.
+          const reservation = await fs.open(rotatedPath, "wx");
+          await reservation.close();
+          try {
+            await fs.rename(this.filePath, rotatedPath);
+          } catch (err) {
+            await fs.unlink(rotatedPath).catch(() => {});
+            throw err;
+          }
           break;
         } catch (err) {
           if (err.code !== "EEXIST") throw err;
           sequence += 1n;
         }
       }
-      await fs.unlink(this.filePath);
 
       // Prune old rotated files if exceeding rotationMaxFiles (oldest first by name)
       const files = await fs.readdir(this.config.telemetryDir);

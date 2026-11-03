@@ -137,6 +137,22 @@ test("JSONL preserves same-millisecond rotations across restarts and prunes olde
   assert.deepEqual(await sink.readEvents(), [...emitted.slice(-2), last]);
 });
 
+test("concurrent JSONL sinks retain every event during rotation", async (t) => {
+  const testDir = await mkdtemp(path.join(tmpdir(), "telemetry-concurrent-"));
+  t.after(() => rm(testDir, { recursive: true, force: true }));
+  const [template] = await fixture("valid-v1.json");
+  const config = { telemetryDir: testDir, maxFileSizeBytes: 1, rotationMaxFiles: 100 };
+  const sink = new JsonlTelemetrySink(config);
+  await sink.emit({ ...template, eventId: "seed" });
+  for (let batch = 0; batch < 4; batch += 1) {
+    await Promise.all([0, 1, 2].map((writer) => new JsonlTelemetrySink(config)
+      .emit({ ...template, eventId: `${batch}-${writer}` })));
+  }
+  assert.deepEqual((await sink.readEvents()).map((event) => event.eventId).sort(),
+    ["seed", ...Array.from({ length: 4 }, (_, batch) =>
+      [0, 1, 2].map((writer) => `${batch}-${writer}`)).flat()].sort());
+});
+
 test("SqliteTelemetrySink or non-blocking fallback emits and reads events", async (t) => {
   const testDir = await mkdtemp(path.join(tmpdir(), "telemetry-sqlite-"));
   t.after(() => rm(testDir, { recursive: true, force: true }));
