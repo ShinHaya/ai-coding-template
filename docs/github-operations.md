@@ -454,10 +454,11 @@ only `contents: write` and `pull-requests: write`. The workflow's own
 Run the first sync for each consumer manually from **Actions → sync-consumers →
 Run workflow**, optionally limiting `repo`, and inspect the pull request. Set
 `adopt` only when the consumer already holds older copies of managed files that
-should be replaced; review those overwrites in the pull request. Consumers should
-add `node scripts/ai-template.mjs check` as a required check, so direct edits to
-managed files fail with a pointer to the template. Emergency fixes also go
-through a template pull request.
+should be replaced; review those overwrites in the pull request. The sync PR includes a consumer CI checklist. Confirm all three managed checks
+are installed and passing, or add them to consumer-owned CI before merging;
+see [`development.md`](development.md#template-synchronization) for commands
+and dependencies. The checklist is a reminder, not automatic CI detection.
+Emergency fixes also go through a template pull request.
 
 Merge a sync pull request that renames tooling state only while no
 orchestration is running in that consumer.

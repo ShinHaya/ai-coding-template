@@ -234,6 +234,9 @@ test("PR summary states the source range and never includes file contents", () =
   assert.match(summary, /compare\/a{40}\.\.\.b{40}/);
   assert.match(summary, /### Written \(1\)/);
   assert.doesNotMatch(summary, /Removed/);
+  assert.match(summary, /\[ \] Confirm the consumer CI runs/);
+  for (const command of ["node scripts/ai-template.mjs check", "node scripts/ai-template.mjs test", "bash scripts/test-issue-worktree.sh"]) assert.ok(summary.includes(command));
+  assert.match(summary, /does not modify consumer workflows/);
   assert.match(renderSyncSummary({ from: null, to: "b".repeat(40), written: [], removed: [], drift: [], adopted: [] }), /\(none\)/);
 });
 
