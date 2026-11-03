@@ -1,27 +1,14 @@
 {
   "$schema": "../agents/config.schema.json",
   "agents": {
-    "enabled": [
-      "claude",
-      "codex",
-      "grok",
-      "opencode"
-    ],
+    "enabled": ["claude", "codex", "grok", "opencode"],
     "models": {
       "claude": {
-        "allow": [
-          "haiku",
-          "opus",
-          "sonnet"
-        ],
-        "deny": [
-          "*fable*"
-        ]
+        "allow": ["haiku", "opus", "sonnet"],
+        "deny": ["*fable*"]
       },
       "codex": {
-        "deny": [
-          "*astra*"
-        ]
+        "deny": ["*astra*"]
       },
       "opencode": {
         "allow": [

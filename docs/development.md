@@ -103,7 +103,7 @@ npm run typecheck
 - Use fake data in examples, tests, screenshots, and fixtures.
 - When writing or reviewing tests, use the repo-local **`writing-good-tests`**
   skill ([`../skills/writing-good-tests/SKILL.md`](../skills/writing-good-tests/SKILL.md))
-  for *how* to write them. The test **strategy** (what to test, by layer) stays
+  for _how_ to write them. The test **strategy** (what to test, by layer) stays
   in [`testing.md`](testing.md).
 - Avoid committing generated output unless the project documents a reason to
   keep it under version control.
@@ -173,11 +173,11 @@ by [`issue-implementation`](../skills/issue-implementation/SKILL.md) or
 Each documentation review skill owns its criteria; this document only points to
 them so the two cannot drift:
 
-| Review | Target | Skill |
-| --- | --- | --- |
-| Requirements | diffs to [`requirements.md`](requirements.md) | [`requirements-review`](../skills/requirements-review/SKILL.md) |
+| Review       | Target                                           | Skill                                                           |
+| ------------ | ------------------------------------------------ | --------------------------------------------------------------- |
+| Requirements | diffs to [`requirements.md`](requirements.md)    | [`requirements-review`](../skills/requirements-review/SKILL.md) |
 | Architecture | [`architecture.md`](architecture.md) or its diff | [`architecture-review`](../skills/architecture-review/SKILL.md) |
-| Issue design | a detailed design in a GitHub Issue or PR | [`design-doc-review`](../skills/design-doc-review/SKILL.md) |
+| Issue design | a detailed design in a GitHub Issue or PR        | [`design-doc-review`](../skills/design-doc-review/SKILL.md)     |
 
 Record review results in the Issue or PR, not in repository files.
 

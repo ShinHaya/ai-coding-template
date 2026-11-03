@@ -6,7 +6,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../scripts/setup-hooks.sh");
+const script = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../scripts/setup-hooks.sh",
+);
 
 /**
  * A throwaway repository holding a copy of setup-hooks.sh and a non-executable
@@ -14,12 +17,23 @@ const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..
  * file so the developer's real settings neither leak in nor change.
  */
 function repository(t) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "setup-hooks-")));
+  const dir = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "setup-hooks-")),
+  );
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const root = path.join(dir, "repo");
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(dir, "global.gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: path.join(dir, "global.gitconfig"),
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
   fs.writeFileSync(env.GIT_CONFIG_GLOBAL, "");
-  const run = (command, args) => spawnSync(command, args, { cwd: fs.existsSync(root) ? root : dir, env, encoding: "utf8" });
+  const run = (command, args) =>
+    spawnSync(command, args, {
+      cwd: fs.existsSync(root) ? root : dir,
+      env,
+      encoding: "utf8",
+    });
   const git = (...args) => {
     const result = run("git", args);
     assert.equal(result.status, 0, result.stderr);
@@ -29,13 +43,24 @@ function repository(t) {
   fs.mkdirSync(path.join(root, "scripts"));
   fs.copyFileSync(script, path.join(root, "scripts/setup-hooks.sh"));
   fs.mkdirSync(path.join(root, ".githooks"));
-  fs.writeFileSync(path.join(root, ".githooks/pre-commit"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+  fs.writeFileSync(
+    path.join(root, ".githooks/pre-commit"),
+    "#!/bin/sh\nexit 0\n",
+    { mode: 0o644 },
+  );
   return {
     root,
     git,
     setup: () => run("bash", ["scripts/setup-hooks.sh"]),
-    localHooksPath: () => run("git", ["config", "--local", "--get", "core.hooksPath"]).stdout.trim(),
-    hookExecutable: () => (fs.statSync(path.join(root, ".githooks/pre-commit")).mode & 0o111) !== 0,
+    localHooksPath: () =>
+      run("git", [
+        "config",
+        "--local",
+        "--get",
+        "core.hooksPath",
+      ]).stdout.trim(),
+    hookExecutable: () =>
+      (fs.statSync(path.join(root, ".githooks/pre-commit")).mode & 0o111) !== 0,
   };
 }
 
@@ -58,7 +83,10 @@ test("setup-hooks refuses to replace a local core.hooksPath and changes nothing"
 
   const refused = repo.setup();
   assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /existing core\.hooksPath = custom-hooks \(local config\)/);
+  assert.match(
+    refused.stderr,
+    /existing core\.hooksPath = custom-hooks \(local config\)/,
+  );
   assert.match(refused.stderr, /git config --local --unset core\.hooksPath/);
   assert.equal(repo.localHooksPath(), "custom-hooks");
   assert.equal(repo.hookExecutable(), false);
@@ -74,10 +102,16 @@ test("setup-hooks refuses to shadow an inherited global core.hooksPath", (t) => 
 
   const refused = repo.setup();
   assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /existing core\.hooksPath = \/fixture\/global-hooks \(global config\)/);
+  assert.match(
+    refused.stderr,
+    /existing core\.hooksPath = \/fixture\/global-hooks \(global config\)/,
+  );
   assert.match(refused.stderr, /git config --local core\.hooksPath \.githooks/);
   assert.equal(repo.localHooksPath(), "");
-  assert.equal(repo.git("config", "--global", "--get", "core.hooksPath"), "/fixture/global-hooks");
+  assert.equal(
+    repo.git("config", "--global", "--get", "core.hooksPath"),
+    "/fixture/global-hooks",
+  );
   assert.equal(repo.hookExecutable(), false);
 
   // The suggested repository-only override is then accepted as already set.

@@ -228,7 +228,6 @@ PR descriptions should include:
 - remaining risks or skipped checks
 - the reviewer verdict and a link to its comment (see §8)
 
-
 ## 8. Review
 
 Review is performed by an independent **reviewer role**, not a commit hook:
@@ -236,7 +235,7 @@ Review is performed by an independent **reviewer role**, not a commit hook:
 - **Single Issue** (`issue-implementation`): before push, the implementer
   dispatches one reviewer on a different verified route with
   `node scripts/issue-dispatch.mjs --role reviewer --execution-mode
-  direct-review --review-pass 1`. The reviewer works read-only in the Issue
+direct-review --review-pass 1`. The reviewer works read-only in the Issue
   worktree and posts one Issue comment whose first line is
   `role=reviewer pass=1 verdict=<PASS|NEEDS_REVISION|REJECTED>`.
 - **Orchestrated Issues** (`orchestrate-issues-implementation`): the reviewer posts the
@@ -259,7 +258,7 @@ merge judgment.
 - Re-run relevant checks after addressing review feedback.
 - Let `Closes #<issue>` close Issues automatically when possible.
 - When agents work in parallel, integrate `origin/main` before merging: `git
-  fetch origin` then `git merge origin/main` (or rebase) and re-run the relevant
+fetch origin` then `git merge origin/main` (or rebase) and re-run the relevant
   checks. Keep PRs small and merge frequently so a lane does not drift far from
   `origin/main`.
 
@@ -317,7 +316,7 @@ Labels exist so the repository owner and AI agents can scan the backlog and
 quickly judge **what kind** of Issue it is, **how risky** it is (via the
 `security` label, see §11.3), and **when** to do it — and so agents can choose
 sensible Issue order. Keep the scheme small: more axes mean more authoring cost
-per Issue. This template uses **two ordering axes** — *type* and *priority* —
+per Issue. This template uses **two ordering axes** — _type_ and _priority_ —
 plus a `security` risk marker (§11.3), a few other stackable modifier labels,
 and the existing GitHub standard labels.
 
@@ -325,19 +324,19 @@ and the existing GitHub standard labels.
 
 Apply **exactly one** type label to every Issue.
 
-| Label           | Use for                                         |
-| --------------- | ----------------------------------------------- |
-| `enhancement`   | New feature or request (the usual default)      |
-| `bug`           | Defect in existing behavior                     |
-| `documentation` | Docs-only changes                               |
+| Label           | Use for                                    |
+| --------------- | ------------------------------------------ |
+| `enhancement`   | New feature or request (the usual default) |
+| `bug`           | Defect in existing behavior                |
+| `documentation` | Docs-only changes                          |
 
 **Modifier labels (stack freely on top of the one type label):**
 
-| Label             | Use for                                                            |
-| ----------------- | ------------------------------------------------------------------ |
+| Label             | Use for                                                             |
+| ----------------- | ------------------------------------------------------------------- |
 | `security`        | Security / privacy work — **also the high-risk marker** (see §11.3) |
-| `discussion`      | Direction must be decided through dialogue before implementation   |
-| `acceptance-test` | Surfaced during owner acceptance testing                           |
+| `discussion`      | Direction must be decided through dialogue before implementation    |
+| `acceptance-test` | Surfaced during owner acceptance testing                            |
 
 GitHub standard labels (`question`, `duplicate`, `invalid`, `wontfix`,
 `help wanted`, `good first issue`) keep their conventional meaning.
@@ -345,15 +344,15 @@ GitHub standard labels (`question`, `duplicate`, `invalid`, `wontfix`,
 ### 11.2 Priority (when to do it) — `priority:*`
 
 Apply **at most one** `priority:*` label. Priority is **optional**: an Issue with
-no `priority:*` label is simply not yet triaged. Priority expresses *urgency /
-ordering only*, not how carefully the work must be handled (see §11.3).
+no `priority:*` label is simply not yet triaged. Priority expresses _urgency /
+ordering only_, not how carefully the work must be handled (see §11.3).
 
 | Label         | Meaning                                                                                |
 | ------------- | -------------------------------------------------------------------------------------- |
-| `priority:P0` | Do now — release blocker; active security / data-loss / privacy harm; broken main flow  |
-| `priority:P1` | Soon — important for the current milestone; notable UX friction; non-urgent hardening   |
-| `priority:P2` | Later — valuable but deferrable, typically the next milestone                           |
-| `priority:P3` | Someday — nice-to-have, cleanup, or tech debt without pressing impact                   |
+| `priority:P0` | Do now — release blocker; active security / data-loss / privacy harm; broken main flow |
+| `priority:P1` | Soon — important for the current milestone; notable UX friction; non-urgent hardening  |
+| `priority:P2` | Later — valuable but deferrable, typically the next milestone                          |
+| `priority:P3` | Someday — nice-to-have, cleanup, or tech debt without pressing impact                  |
 
 `priority:P0..P3` is deliberately distinct from any product-level level scheme
 (for example a delegation or autonomy level named `L0..L2`); do not reuse `L*`
@@ -417,7 +416,7 @@ changed paths. Reruns therefore do not add pull requests or commits.
 ### 13.1 Consumer list
 
 ```json
-{ "consumers": [ { "repo": "owner/name", "base": "main", "autoMerge": false } ] }
+{ "consumers": [{ "repo": "owner/name", "base": "main", "autoMerge": false }] }
 ```
 
 Add a consumer with one entry. `base` is the pull request target, which may

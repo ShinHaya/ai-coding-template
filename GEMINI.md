@@ -176,7 +176,7 @@ Repository-local Agent Skills live under `skills/` (see
   candidates, report what changed, and propose model-policy edits
 - `requirements-review` / `architecture-review` / `design-doc-review`: the
   documentation review criteria (results go in the Issue/PR)
-- `writing-good-tests`: how to write a test (the *what to test* strategy stays
+- `writing-good-tests`: how to write a test (the _what to test_ strategy stays
   in [`docs/testing.md`](docs/testing.md))
 
 ## Development Workflow
@@ -233,7 +233,7 @@ The canonical quality gate definitions live in
 - Keep storage access behind a small abstraction; never log decrypted values.
 - Keep externally-supplied data typed at the boundary.
 - When writing or reviewing tests, follow the `writing-good-tests` skill for
-  *how*; the *what to test* strategy stays in
+  _how_; the _what to test_ strategy stays in
   [`docs/testing.md`](docs/testing.md).
 
 ## Manual Testing Expectations

@@ -67,7 +67,7 @@ Follow this workflow:
 4. **Review before push or PR creation.** Dispatch a reviewer role from a
    **different** verified route using
    `node scripts/issue-dispatch.mjs --role reviewer
-   --execution-mode direct-review --review-pass 1` (plus the route, issue, release
+--execution-mode direct-review --review-pass 1` (plus the route, issue, release
    policy, and next-milestone flags). The reviewer works read-only in the existing
    Issue worktree: it reads the Issue acceptance criteria, changed file paths,
    `git diff origin/<baseBranch>..HEAD`, and the local test summary. No PR exists yet.
@@ -92,6 +92,7 @@ Follow this workflow:
    `same-route-reviewer:*` in the PR description. If route discovery fails,
    state that clearly and proceed without a reviewer pass; record this exception
    in the PR description.
+
 5. Push the branch to GitHub and create a PR with
    `gh pr create --base <baseBranch>`, using the configured branch resolved in
    step 2 even when GitHub has a different default branch. Include

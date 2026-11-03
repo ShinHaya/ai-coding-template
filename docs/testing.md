@@ -1,9 +1,9 @@
 # Testing
 
 This document owns the **testing strategy**: what to test, at which layer, and
-how aggressively. It is the source of truth for *what* to test; the
+how aggressively. It is the source of truth for _what_ to test; the
 [`writing-good-tests`](../skills/writing-good-tests/SKILL.md) skill is the source
-of truth for *how* to write a test.
+of truth for _how_ to write a test.
 
 Out of scope here: the manual checklist itself (see
 [`manual-test.md`](manual-test.md)) and the canonical command list (see
@@ -20,13 +20,13 @@ missing test is an omission or a decision. -->
 
 ## 2. Test Types
 
-| Type | Scope | Runs in CI |
-| --- | --- | --- |
-| Unit | <!-- pure logic, no I/O --> | |
-| Integration | <!-- module boundaries, real storage --> | |
-| End-to-end | <!-- full user flow --> | |
-| Tooling (shell / Node) | Issue worktree lifecycle and Issue orchestration scripts; no agent CLI required | shell: yes |
-| Template delivery (E2E, template only) | The `sync-consumers` workflow's CLI steps against throwaway local consumers, then the managed suite inside a synced consumer (`tests/e2e/`, not synced) | yes |
+| Type                                   | Scope                                                                                                                                                   | Runs in CI |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Unit                                   | <!-- pure logic, no I/O -->                                                                                                                             |            |
+| Integration                            | <!-- module boundaries, real storage -->                                                                                                                |            |
+| End-to-end                             | <!-- full user flow -->                                                                                                                                 |            |
+| Tooling (shell / Node)                 | Issue worktree lifecycle and Issue orchestration scripts; no agent CLI required                                                                         | shell: yes |
+| Template delivery (E2E, template only) | The `sync-consumers` workflow's CLI steps against throwaway local consumers, then the managed suite inside a synced consumer (`tests/e2e/`, not synced) | yes        |
 
 ## 3. Test Environment
 

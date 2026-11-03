@@ -5,16 +5,16 @@ index: put detailed decisions in the document that owns the relevant topic.
 
 ## Document Responsibilities
 
-| Document | Responsibility |
-| --- | --- |
-| [`requirements.md`](requirements.md) | **Canonical product direction**: reason for being, success definition, scope, milestone order, non-negotiable requirements (§8). |
-| [`architecture.md`](architecture.md) | **Canonical target architecture / technology selection**: process and trust boundaries, module decomposition, data model, security mapping, decision records. |
-| [`security.md`](security.md) | Security and privacy review notes, threat model, sensitive-data handling, encryption, external-service policy, and read-only cloud observation. |
-| [`dependency-security.md`](dependency-security.md) | Dependency / supply-chain vulnerability detection and triage (Dependabot + CI audit gate). |
-| [`development.md`](development.md) | Local setup, commands, project structure, implementation conventions, quality gates, review criteria (§9), and the deploy-failure diagnosis pointer. |
-| [`testing.md`](testing.md) | Testing strategy: what to test, at which layer, with which commands. |
-| [`manual-test.md`](manual-test.md) | Manual test checklist. |
-| [`github-operations.md`](github-operations.md) | Issue, branch, worktree, label/priority, commit, pull request, reviewer-role, and merge workflow rules. §3.1 also owns the plan/design-record policy (plans and designs live in the Issue/PR, not in repository files). |
+| Document                                           | Responsibility                                                                                                                                                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`requirements.md`](requirements.md)               | **Canonical product direction**: reason for being, success definition, scope, milestone order, non-negotiable requirements (§8).                                                                                        |
+| [`architecture.md`](architecture.md)               | **Canonical target architecture / technology selection**: process and trust boundaries, module decomposition, data model, security mapping, decision records.                                                           |
+| [`security.md`](security.md)                       | Security and privacy review notes, threat model, sensitive-data handling, encryption, external-service policy, and read-only cloud observation.                                                                         |
+| [`dependency-security.md`](dependency-security.md) | Dependency / supply-chain vulnerability detection and triage (Dependabot + CI audit gate).                                                                                                                              |
+| [`development.md`](development.md)                 | Local setup, commands, project structure, implementation conventions, quality gates, review criteria (§9), and the deploy-failure diagnosis pointer.                                                                    |
+| [`testing.md`](testing.md)                         | Testing strategy: what to test, at which layer, with which commands.                                                                                                                                                    |
+| [`manual-test.md`](manual-test.md)                 | Manual test checklist.                                                                                                                                                                                                  |
+| [`github-operations.md`](github-operations.md)     | Issue, branch, worktree, label/priority, commit, pull request, reviewer-role, and merge workflow rules. §3.1 also owns the plan/design-record policy (plans and designs live in the Issue/PR, not in repository files). |
 
 ## Primary Sources
 

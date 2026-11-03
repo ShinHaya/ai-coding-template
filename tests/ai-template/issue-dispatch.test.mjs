@@ -7,11 +7,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 const dispatchCli = path.join(repoRoot, "scripts/issue-dispatch.mjs");
 
 async function makeFakeWorker(scriptBody) {
-  const directory = await mkdtemp(path.join(tmpdir(), "example-dispatch-exit-"));
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "example-dispatch-exit-"),
+  );
   const filePath = path.join(directory, "claude");
   await writeFile(filePath, `#!${process.execPath}\n${scriptBody}\n`, "utf8");
   await chmod(filePath, 0o755);
@@ -33,10 +38,14 @@ function runDispatch(executable, { timeoutMs = 10_000 } = {}) {
     process.execPath,
     [
       dispatchCli,
-      "--route-json", JSON.stringify(route),
-      "--issue", "1",
-      "--release-policy", "pr-created",
-      "--next-milestone", "pr-created",
+      "--route-json",
+      JSON.stringify(route),
+      "--issue",
+      "1",
+      "--release-policy",
+      "pr-created",
+      "--next-milestone",
+      "pr-created",
     ],
     { encoding: "utf8", timeout: 30_000 },
   );
@@ -52,7 +61,9 @@ test("dispatch CLI exits 0 when the worker exits 0", async () => {
 });
 
 test("dispatch CLI exits non-zero when the worker executable is missing", async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), "example-dispatch-missing-"));
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "example-dispatch-missing-"),
+  );
   const { status, final } = runDispatch(path.join(directory, "claude"));
   assert.equal(final.status, "failed");
   assert.equal(final.code, null);
@@ -82,30 +93,76 @@ test("dispatch CLI exits 124 when the worker times out", async () => {
 });
 
 for (const scenario of [
-  { name: "accepts a verified Claude alias", agent: "Claude", token: "sonnet", requestedModel: "sonnet", accepted: true },
-  { name: "accepts the exact canonical model", agent: "Claude", token: "claude-sonnet-4-6", requestedModel: "sonnet", accepted: true },
-  { name: "rejects an unrelated alias", agent: "Claude", token: "opus", requestedModel: "sonnet" },
-  { name: "rejects case changes", agent: "Claude", token: "Sonnet", requestedModel: "sonnet" },
-  { name: "rejects partial alias matches", agent: "Claude", token: "sonnet-extra", requestedModel: "sonnet" },
-  { name: "rejects an absent requested model", agent: "Claude", token: "sonnet" },
-  { name: "rejects aliases for a runtime without reported-model resolution", agent: "Codex", token: "sonnet", requestedModel: "sonnet" },
+  {
+    name: "accepts a verified Claude alias",
+    agent: "Claude",
+    token: "sonnet",
+    requestedModel: "sonnet",
+    accepted: true,
+  },
+  {
+    name: "accepts the exact canonical model",
+    agent: "Claude",
+    token: "claude-sonnet-4-6",
+    requestedModel: "sonnet",
+    accepted: true,
+  },
+  {
+    name: "rejects an unrelated alias",
+    agent: "Claude",
+    token: "opus",
+    requestedModel: "sonnet",
+  },
+  {
+    name: "rejects case changes",
+    agent: "Claude",
+    token: "Sonnet",
+    requestedModel: "sonnet",
+  },
+  {
+    name: "rejects partial alias matches",
+    agent: "Claude",
+    token: "sonnet-extra",
+    requestedModel: "sonnet",
+  },
+  {
+    name: "rejects an absent requested model",
+    agent: "Claude",
+    token: "sonnet",
+  },
+  {
+    name: "rejects aliases for a runtime without reported-model resolution",
+    agent: "Codex",
+    token: "sonnet",
+    requestedModel: "sonnet",
+  },
 ]) {
   test(`dispatch ${scenario.name}`, async () => {
     const launches = [];
-    const operation = dispatchWorker({
-      route: {
-        agent: scenario.agent, role: "worker", model: "claude-sonnet-4-6",
-        requestedModel: scenario.requestedModel,
-        selector: `claude --model ${scenario.token} --permission-mode bypassPermissions`,
-        selectable: true, verifiable: true, timeoutMs: 1000,
+    const operation = dispatchWorker(
+      {
+        route: {
+          agent: scenario.agent,
+          role: "worker",
+          model: "claude-sonnet-4-6",
+          requestedModel: scenario.requestedModel,
+          selector: `claude --model ${scenario.token} --permission-mode bypassPermissions`,
+          selectable: true,
+          verifiable: true,
+          timeoutMs: 1000,
+        },
+        issueNumber: 1,
+        releasePolicy: "pr-created",
+        nextMilestone: "pr-created",
+        cwd: repoRoot,
       },
-      issueNumber: 1, releasePolicy: "pr-created", nextMilestone: "pr-created", cwd: repoRoot,
-    }, {
-      spawnWorker: async (...args) => {
-        launches.push(args);
-        return { pid: 123, kill() {}, wait: async () => ({ code: 0 }) };
+      {
+        spawnWorker: async (...args) => {
+          launches.push(args);
+          return { pid: 123, kill() {}, wait: async () => ({ code: 0 }) };
+        },
       },
-    });
+    );
     if (scenario.accepted) {
       const handle = await operation;
       assert.equal(handle.model, "claude-sonnet-4-6");
