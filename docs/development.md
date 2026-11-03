@@ -490,6 +490,8 @@ node scripts/ai-template.mjs generate
 node scripts/ai-template.mjs check
 # Run the managed test suite (tests/ai-template/*.test.mjs)
 node scripts/ai-template.mjs test
+# Run the managed worktree lifecycle tests
+bash scripts/test-issue-worktree.sh
 ```
 
 `sync` reads managed files from the template's Git index and fails when a
@@ -511,6 +513,19 @@ the synced files. All paths are validated before anything is written.
 - `--pr-body <file>` writes a Markdown summary (source range and paths, never
   file contents); `--source-repository owner/name` records the source in the
   lock and links the compare range.
+
+For consumer CI, install a Node.js version compatible with the managed suite
+(currently Node 22 or later), Git, Bash, and jq. Add the suite's runtime test
+dependencies (`@langchain/langgraph`, `@langchain/langgraph-checkpoint`,
+`@langchain/core`, and `yaml`) to the consumer's own dependency manifest and
+lockfile using compatible versions from the template's `package.json`. Install
+those dependencies using the consumer's package manager before running all three
+commands above from the checkout root. Keep the consumer's existing test steps;
+add these commands to its pull request CI and require the resulting check in
+branch protection where appropriate. Run the same commands locally after sync.
+The sync PR checklist reminds reviewers to confirm CI coverage; it does not
+inspect workflows or prove that the commands ran. Consumer workflows and package
+files remain repo-owned.
 
 In the template itself, `check` also verifies that every manifest pattern
 matches a tracked regular file, that no managed path is a generated output, and
