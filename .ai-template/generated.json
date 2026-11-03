@@ -80,6 +80,46 @@
     ".claude/skills/writing-good-tests": {
       "type": "link",
       "target": "../../skills/writing-good-tests"
+    },
+    ".opencode/agents/deep-reasoner.md": {
+      "type": "file",
+      "hash": "53bfeb7f215917125b37dbdb69563dc18f78fb17e03b1000ec806ed067ecb4e0"
+    },
+    ".opencode/agents/fast-worker.md": {
+      "type": "file",
+      "hash": "b13db9b59be08974a1bf8017a12e185a878b88e27111ba119022baa75555a473"
+    },
+    ".opencode/skills/architecture-review": {
+      "type": "link",
+      "target": "../../skills/architecture-review"
+    },
+    ".opencode/skills/create-issue": {
+      "type": "link",
+      "target": "../../skills/create-issue"
+    },
+    ".opencode/skills/design-doc-review": {
+      "type": "link",
+      "target": "../../skills/design-doc-review"
+    },
+    ".opencode/skills/handoff-issue": {
+      "type": "link",
+      "target": "../../skills/handoff-issue"
+    },
+    ".opencode/skills/issue-implementation": {
+      "type": "link",
+      "target": "../../skills/issue-implementation"
+    },
+    ".opencode/skills/orchestrate-issues-implementation": {
+      "type": "link",
+      "target": "../../skills/orchestrate-issues-implementation"
+    },
+    ".opencode/skills/requirements-review": {
+      "type": "link",
+      "target": "../../skills/requirements-review"
+    },
+    ".opencode/skills/writing-good-tests": {
+      "type": "link",
+      "target": "../../skills/writing-good-tests"
     }
   },
   "hooks": [

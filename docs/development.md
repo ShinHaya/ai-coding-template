@@ -306,6 +306,22 @@ handoff, but cannot be discovered, selected or launched. `--agent` accepts regis
 aliases and stores canonical IDs. Retired definitions also block old command
 aliases in cached/explicit selectors. Node is required for these identity checks.
 
+`agents.models.<id>.allow` optionally restricts an enabled runtime to an exact
+list of canonical model IDs; keys must be enabled runtime IDs. Models outside
+the list are never probed (diagnostic `model-not-allowed`) and are rejected from
+cached or explicit capabilities, route selection, dispatch verification and
+launch. Matching is exact: no wildcards, suffixes or case folding. Allowlists
+are part of the registry fingerprint, so editing one invalidates capability
+caches. An empty list admits no model for that runtime.
+
+This repository's own `.ai-template/config.json` disables Gemini and allows only
+OpenCode Zen free models whose provider states zero retention and no training
+use: `opencode/glm-5.3-flash-free` and `opencode/deepseek-v4.1-flash-free`
+(per https://opencode.ai/docs/zen, checked 2026-11-03). Free models that may
+use collected data for model improvement, or that retain data (such as
+`beam-free`, 30 days), are excluded. Free periods and privacy terms change
+upstream; re-check the source and update the list by hand.
+
 For a new CLI, add one JSON and enable its ID. Ordinary JSON arrays or provider/model
 line catalogs use the existing generic parsers. CLI-specific state parsers are a
 closed library, never dynamic imports from a definition. Auth/catalog success is
