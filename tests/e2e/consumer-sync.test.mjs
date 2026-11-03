@@ -116,10 +116,10 @@ test("a fresh consumer syncs, regenerates and passes check, then stays stable", 
 });
 
 test("the managed suite passes inside a synced consumer", async (t) => {
-  // Uses template defaults: with repository settings, four managed tests
-  // still read the consumer's settings (#31).
+  // The consumer has its own settings (non-default trunk, two enabled
+  // runtimes, a local skill); the managed suite must not depend on them (#31).
   const template = templateCheckout(t);
-  const consumer = consumerCheckout(t, { config: null });
+  const consumer = consumerCheckout(t);
   assert.equal(syncStep(template, consumer).sync.status, 0);
   assert.equal(consumerCli(consumer, "generate").status, 0);
   // The consumer layout has no manifest, consumer list or template-only

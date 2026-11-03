@@ -57,6 +57,14 @@ npm ci && npm run test:orchestrator
 npm run test:e2e
 ```
 
+`npm run test:orchestrator` (`node scripts/ai-template.mjs test`) runs the
+managed suite from an empty temporary directory, so results do not depend on
+the checkout's own `.ai-template/config.json` (enabled runtimes, base branch,
+local skills). Running `node --test tests/ai-template/...` directly from the
+repository root does not get this isolation. New managed tests must not rely on
+the current directory: pass an explicit fixture `cwd`/root, resolve scripts from
+`import.meta.dirname`, and keep module scope free of repository-setting reads.
+
 ## 6. Manual Testing
 
 See [`manual-test.md`](manual-test.md). Run the relevant items when a change
