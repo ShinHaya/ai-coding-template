@@ -108,7 +108,22 @@ Follow this workflow:
      verification results; this does not authorize merging.
    - If any check fails, inspect the failed run for that head with
      `gh run view <run-id> --log-failed`, identify the cause, and make a scoped
-     fix. Run applicable local checks, commit, and push to the same branch.
+     fix. When the failed check is a Cloud deploy or an infrastructure-as-code
+     apply, do not conclude from the CI log alone. A deploy can create a
+     revision that never starts or never receives traffic. Inspect the live
+     resources, logs, and metrics with the repository's read-only observer
+     before deciding the cause. Read the command and the identity name from
+     the development document (`repository.documents.development`, or
+     `docs/development.md` and `AGENTS.md` when that setting is omitted),
+     section [Deploy failure diagnosis](../../docs/development.md#deploy-failure-diagnosis),
+     and follow [references/cloud-observer.md](references/cloud-observer.md).
+     Do not hard-code a provider command, a configuration name, or a project
+     identifier in this skill, and do not fall back to a broader operator
+     identity. If the repository records no read-only procedure, say so and
+     stop that diagnosis. On a public repository the CI job may only add an
+     `::error::` annotation that points at the local procedure. Do not print
+     cloud logs, resource payloads, or tokens into the CI log. Run applicable
+     local checks, commit, and push to the same branch.
      Increment the counter for each CI fix cycle, then monitor the new head.
      CI fixes do **not** receive another reviewer pass.
    - Allow at most **3 CI fix cycles**. If CI/CD still fails after the third

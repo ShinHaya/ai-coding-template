@@ -13,7 +13,7 @@ files under `skills/`. Inspect runtime IDs with `node scripts/ai-template.mjs ag
 | Skill | Use when |
 | --- | --- |
 | [`create-issue`](create-issue/SKILL.md) | Filing or standardizing an Issue with labels and native `Blocked by` dependencies |
-| [`issue-implementation`](issue-implementation/SKILL.md) | Implementing exactly one Issue end to end: worktree gate, commit, independent reviewer pass, PR, CI monitoring |
+| [`issue-implementation`](issue-implementation/SKILL.md) | Implementing exactly one Issue end to end: worktree gate, commit, independent reviewer pass, PR, CI monitoring. A Cloud or IaC failure follows [`references/cloud-observer.md`](issue-implementation/references/cloud-observer.md) and the repository development document. |
 | [`handoff-issue`](handoff-issue/SKILL.md) | Resuming an existing Issue worktree after a session limit, interruption, or agent change |
 | [`orchestrate-issues-implementation`](orchestrate-issues-implementation/SKILL.md) | Coordinating several Issues: dependency order, run-time agent/model routing, role programs, integration gate |
 | [`refresh-model-catalog`](refresh-model-catalog/SKILL.md) | Refreshing or inspecting the local model catalog and proposing model-policy changes |
