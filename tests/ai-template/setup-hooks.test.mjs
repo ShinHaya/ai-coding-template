@@ -120,3 +120,23 @@ test("setup-hooks refuses to shadow an inherited global core.hooksPath", (t) => 
   assert.equal(after.status, 0, after.stderr);
   assert.match(after.stdout, /already set to \.githooks/);
 });
+
+test("template pre-commit gates reference existing npm scripts", (t) => {
+  const root = path.resolve(path.dirname(script), "..");
+  // Consumers own their hooks and package scripts; this is a template contract.
+  if (!fs.existsSync(path.join(root, "ai-template.manifest.json"))) {
+    t.skip("consumer-owned quality gates");
+    return;
+  }
+  const hook = fs.readFileSync(path.join(root, ".githooks/pre-commit"), "utf8");
+  const { scripts } = JSON.parse(
+    fs.readFileSync(path.join(root, "package.json"), "utf8"),
+  );
+  const gates = [
+    ...hook.matchAll(/^run_gate\s+"[^"]+"\s+"npm run ([\w:-]+)"/gm),
+  ];
+  assert.ok(gates.length > 0, "expected npm quality gates in the real hook");
+  for (const [, name] of gates) {
+    assert.equal(typeof scripts[name], "string", `missing npm script: ${name}`);
+  }
+});

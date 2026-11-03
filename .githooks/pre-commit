@@ -4,7 +4,7 @@
 # Runs the following checks before every commit:
 #   1. npm run format   — Prettier format check
 #   2. npm run lint     — ESLint
-#   3. npm run typecheck — TypeScript (main + renderer tsconfigs)
+#   3. npm run typecheck — TypeScript checkJs (tsconfig.json)
 #
 # Skips on:
 #   - commit message contains [skip-hooks] (read from COMMIT_EDITMSG)
@@ -14,9 +14,8 @@
 # or use `git commit --no-verify` (git built-in, but leaves no trace in
 # the commit message).
 #
-# Note: `npm test` is intentionally excluded from the pre-commit hook
-# because it includes a full build step and is too slow for per-commit use.
-# Run `npm test` manually or via `npm run release:check` before pushing.
+# Tests run separately from these quick per-commit checks. Run the suites
+# documented in docs/development.md before pushing.
 
 set -euo pipefail
 

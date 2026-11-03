@@ -21,6 +21,12 @@ apply and which are "not applicable". -->
 and test runner. For each significant choice, record what it was chosen over and
 why (see §7). -->
 
+Prettier 3.9.10 (MIT) is the pinned development formatter. `npm run format`
+checks supported source, configuration and documentation files without writing;
+`npm run format:write` applies formatting explicitly. ESLint remains responsible
+for correctness. Prettier runs locally and in CI without a service or telemetry.
+Generated output and local state are excluded in `.prettierignore`.
+
 ## 3. Process and Trust Boundaries
 
 <!-- Which code runs in which process / privilege level, what crosses each
@@ -50,6 +56,17 @@ permits. -->
 <!-- For each significant decision: context, alternatives considered,
 rationale, and what would trigger reconsideration. ADR-style, whether or not in
 separate ADR files. -->
+
+### Formatting gate (Issue #55)
+
+The pre-commit format gate must call a real, read-only command. Prettier was
+chosen over Biome to preserve consumers' ESLint configurations and keep
+formatting separate from correctness checks. It runs separately rather than via
+`eslint-plugin-prettier`. Current ESLint rules contain no formatting rules, so
+`eslint-config-prettier` adds no value; reconsider it if stylistic ESLint rules
+are introduced. The dependency is pinned and included in the existing audit gate.
+Formatter configuration remains repo-owned because consumers have different
+formatting policies and generated paths; sync must not reformat consumer code.
 
 ## 8. Security Mapping
 

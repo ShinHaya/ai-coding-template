@@ -39,7 +39,7 @@ review criteria**. GitHub workflow rules live in
 
 ```bash
 # Install dependencies
-# (npm ci is needed only for the issue-* orchestration scripts)
+# (quality gates and the issue-* orchestration scripts)
 npm ci
 
 # Install the local Git hooks (once per clone)
@@ -73,8 +73,23 @@ bash scripts/setup-hooks.sh
 ### 5.1 Formatting
 
 ```bash
-# Format command
+# Check without changing files (also used by pre-commit and CI)
+npm run format
+# Apply formatting before staging changes
+npm run format:write
 ```
+
+Prettier is pinned in `devDependencies`. The hook only checks formatting; it never
+rewrites staged files. Generated output, lockfiles, dependencies, worktrees and
+local state are excluded by `.prettierignore`.
+
+Formatter configuration (`.prettierrc.json`, `.prettierignore`) is repo-owned,
+so template sync does not overwrite a consumer's formatting policy or reformat
+its existing code. Consumers adopting this gate should install the pinned
+Prettier version from this template, add `format` (`prettier --check .`) and
+`format:write` (`prettier --write .`) scripts, and adapt the two configuration
+files to their generated paths. Run `format:write` in a separate reviewed change
+before enabling the gate.
 
 ### 5.2 Linting
 
@@ -115,7 +130,9 @@ npm run typecheck
 Run the relevant checks before committing code:
 
 ```bash
-# format
+# format (read-only)
+npm run format
+# To fix formatting before staging: npm run format:write
 # lint
 npm run lint
 # typecheck
@@ -145,7 +162,7 @@ In the template itself, `npm run audit:check` audits **all** dependencies at
 `--audit-level=high` instead of using `--omit=dev`. Every template dependency is
 a devDependency, but `@langchain/*` and `yaml` are loaded at run time by the
 orchestration scripts that consumers receive, so they are part of the shipped
-surface. ESLint is the only build-time-only dependency and is audited as well.
+surface. ESLint, TypeScript and Prettier are build-time-only dependencies and are audited as well.
 
 ## 9. Review
 

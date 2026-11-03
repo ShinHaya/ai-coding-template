@@ -46,7 +46,7 @@ Then create the `priority:P0`–`priority:P3` labels described in
 
 ```bash
 bash scripts/setup-hooks.sh
-npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
+npm ci   # installs quality-gate and orchestration tools
 ```
 
 `setup-hooks.sh` sets `git config --local core.hooksPath .githooks`, which

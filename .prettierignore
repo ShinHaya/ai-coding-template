@@ -1,0 +1,17 @@
+# Dependencies, output, caches and local state
+node_modules/
+.worktrees/
+state/
+dist/
+build/
+coverage/
+.env*
+*.session
+# Lockfiles and generated runtime discovery files
+package-lock.json
+.ai-template/generated.json
+.ai-template/lock.json
+.agents/agents/
+.claude/agents/
+.gemini/agents/
+.opencode/
