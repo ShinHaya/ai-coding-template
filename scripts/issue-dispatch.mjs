@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { buildRoleDispatchPayload } from "./issue-roles.mjs";
 import { launchWithAdapter } from "./issue-runtime-adapters/index.mjs";
-import { splitSelector } from "./issue-runtime-adapters/shared.mjs";
+import { selectorTargetsRoute } from "./issue-runtime-adapters/shared.mjs";
 
 /**
  * Launch a worker for one Issue on one capability route.
@@ -43,8 +43,7 @@ export async function dispatchWorker(input, ctx = {}) {
   if (!input.nextMilestone) throw new Error("next-milestone-required");
 
   // Ensure the selector still parses and still targets the same model token.
-  const tokens = splitSelector(route.selector);
-  if (!tokens.includes(route.model)) throw new Error("model-mismatch");
+  if (!selectorTargetsRoute(route, input.cwd ?? ctx.cwd)) throw new Error("model-mismatch");
 
   // The role-scoped half of the job goes through the closed-payload builder,
   // so the deny-list guard runs on the live dispatch path, not only in tests.

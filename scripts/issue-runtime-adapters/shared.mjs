@@ -323,6 +323,15 @@ export function splitSelector(selector) {
   return tokens;
 }
 
+/** Match only exact model tokens recorded by discovery for this runtime. */
+export function selectorTargetsRoute(route, root = process.cwd()) {
+  const tokens = splitSelector(route.selector);
+  if (tokens.includes(route.model)) return true;
+  return findRuntime(route.agent, root)?.models?.resolveReportedModel === true &&
+    typeof route.requestedModel === "string" && route.requestedModel.length > 0 &&
+    tokens.includes(route.requestedModel);
+}
+
 /** Retirement is registry data, including executable aliases in cached selectors. */
 export function isRetiredRuntimeRoute(route, root = process.cwd()) {
   if (findRuntime(route?.agent, root)?.retired) return true;

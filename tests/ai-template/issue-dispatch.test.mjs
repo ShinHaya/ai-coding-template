@@ -1,4 +1,5 @@
 import test from "node:test";
+import { dispatchWorker } from "../../scripts/issue-dispatch.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, writeFile } from "node:fs/promises";
@@ -79,3 +80,40 @@ test("dispatch CLI exits 124 when the worker times out", async () => {
   assert.equal(final.status, "timeout");
   assert.equal(status, 124);
 });
+
+for (const scenario of [
+  { name: "accepts a verified Claude alias", agent: "Claude", token: "sonnet", requestedModel: "sonnet", accepted: true },
+  { name: "accepts the exact canonical model", agent: "Claude", token: "claude-sonnet-4-6", requestedModel: "sonnet", accepted: true },
+  { name: "rejects an unrelated alias", agent: "Claude", token: "opus", requestedModel: "sonnet" },
+  { name: "rejects case changes", agent: "Claude", token: "Sonnet", requestedModel: "sonnet" },
+  { name: "rejects partial alias matches", agent: "Claude", token: "sonnet-extra", requestedModel: "sonnet" },
+  { name: "rejects an absent requested model", agent: "Claude", token: "sonnet" },
+  { name: "rejects aliases for a runtime without reported-model resolution", agent: "Codex", token: "sonnet", requestedModel: "sonnet" },
+]) {
+  test(`dispatch ${scenario.name}`, async () => {
+    const launches = [];
+    const operation = dispatchWorker({
+      route: {
+        agent: scenario.agent, role: "worker", model: "claude-sonnet-4-6",
+        requestedModel: scenario.requestedModel,
+        selector: `claude --model ${scenario.token} --permission-mode bypassPermissions`,
+        selectable: true, verifiable: true, timeoutMs: 1000,
+      },
+      issueNumber: 1, releasePolicy: "pr-created", nextMilestone: "pr-created", cwd: repoRoot,
+    }, {
+      spawnWorker: async (...args) => {
+        launches.push(args);
+        return { pid: 123, kill() {}, wait: async () => ({ code: 0 }) };
+      },
+    });
+    if (scenario.accepted) {
+      const handle = await operation;
+      assert.equal(handle.model, "claude-sonnet-4-6");
+      assert.equal(launches.length, 1);
+      assert.deepEqual(launches[0][1].slice(0, 2), ["--model", scenario.token]);
+    } else {
+      await assert.rejects(operation, /^Error: model-mismatch$/);
+      assert.equal(launches.length, 0);
+    }
+  });
+}
