@@ -8,6 +8,21 @@
       "opencode"
     ],
     "models": {
+      "claude": {
+        "allow": [
+          "haiku",
+          "opus",
+          "sonnet"
+        ],
+        "deny": [
+          "*fable*"
+        ]
+      },
+      "codex": {
+        "deny": [
+          "*astra*"
+        ]
+      },
       "opencode": {
         "allow": [
           "opencode/deepseek-v4.1-flash-free",
