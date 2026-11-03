@@ -13,7 +13,6 @@ user-invocable: false
 Tests verify real behavior, not implementation details. The goal is confidence that your code works, not coverage numbers.
 
 **Core principles:**
-
 1. Test behavior, not implementation — refactoring shouldn't break tests
 2. Integration tests provide better confidence-to-cost ratio than unit tests
 3. Wait for actual conditions, not arbitrary timeouts
@@ -25,18 +24,15 @@ Tests verify real behavior, not implementation details. The goal is confidence t
 Use **Arrange-Act-Assert** (or Given-When-Then):
 
 ```typescript
-test("user can cancel reservation", async () => {
+test('user can cancel reservation', async () => {
   // Arrange
-  const reservation = await createReservation({
-    userId: "user-1",
-    roomId: "room-1",
-  });
+  const reservation = await createReservation({ userId: 'user-1', roomId: 'room-1' });
 
   // Act
   const result = await cancelReservation(reservation.id);
 
   // Assert
-  expect(result.status).toBe("cancelled");
+  expect(result.status).toBe('cancelled');
   expect(await getReservation(reservation.id)).toBeNull();
 });
 ```
@@ -51,7 +47,7 @@ Flaky tests often guess at timing. This creates race conditions where tests pass
 
 ```typescript
 // BAD: Guessing at timing
-await new Promise((r) => setTimeout(r, 50));
+await new Promise(r => setTimeout(r, 50));
 const result = getResult();
 
 // GOOD: Waiting for condition
@@ -65,7 +61,7 @@ const result = getResult();
 async function waitFor<T>(
   condition: () => T | undefined | null | false,
   description: string,
-  timeoutMs = 5000,
+  timeoutMs = 5000
 ): Promise<T> {
   const startTime = Date.now();
 
@@ -74,23 +70,21 @@ async function waitFor<T>(
     if (result) return result;
 
     if (Date.now() - startTime > timeoutMs) {
-      throw new Error(
-        `Timeout waiting for ${description} after ${timeoutMs}ms`,
-      );
+      throw new Error(`Timeout waiting for ${description} after ${timeoutMs}ms`);
     }
 
-    await new Promise((r) => setTimeout(r, 10)); // Poll every 10ms
+    await new Promise(r => setTimeout(r, 10)); // Poll every 10ms
   }
 }
 ```
 
 ### Quick Patterns
 
-| Scenario       | Pattern                                              |
-| -------------- | ---------------------------------------------------- |
+| Scenario | Pattern |
+|----------|---------|
 | Wait for event | `waitFor(() => events.find(e => e.type === 'DONE'))` |
-| Wait for state | `waitFor(() => machine.state === 'ready')`           |
-| Wait for count | `waitFor(() => items.length >= 5)`                   |
+| Wait for state | `waitFor(() => machine.state === 'ready')` |
+| Wait for count | `waitFor(() => items.length >= 5)` |
 
 ### When Arbitrary Timeout IS Correct
 
@@ -98,8 +92,8 @@ Only when testing actual timing behavior (debounce, throttle, intervals):
 
 ```typescript
 // Testing tool that ticks every 100ms
-await waitForEvent(manager, "TOOL_STARTED"); // First: wait for condition
-await new Promise((r) => setTimeout(r, 200)); // Then: wait for 2 ticks
+await waitForEvent(manager, 'TOOL_STARTED'); // First: wait for condition
+await new Promise(r => setTimeout(r, 200));   // Then: wait for 2 ticks
 // Comment explains WHY: 200ms = 2 ticks at 100ms intervals
 ```
 
@@ -121,22 +115,22 @@ const mockClient = vi.mocked(httpx.Client);
 class RegistryClient {
   constructor(private client: HttpClient) {}
   async getRepos() {
-    return this.client.get("https://registry.example.com/v2/_catalog");
+    return this.client.get('https://registry.example.com/v2/_catalog');
   }
 }
 
 // Mock your wrapper
-vi.mock("./registry-client");
+vi.mock('./registry-client');
 ```
 
 This simplifies tests AND improves your design.
 
 ### Managed vs Unmanaged Dependencies
 
-| Dependency Type              | Example                             | Strategy           |
-| ---------------------------- | ----------------------------------- | ------------------ |
-| **Managed** (you control it) | Your database, your file system     | Use REAL instances |
-| **Unmanaged** (external)     | Third-party APIs, SMTP, message bus | Use MOCKS          |
+| Dependency Type | Example | Strategy |
+|-----------------|---------|----------|
+| **Managed** (you control it) | Your database, your file system | Use REAL instances |
+| **Unmanaged** (external) | Third-party APIs, SMTP, message bus | Use MOCKS |
 
 Communications with managed dependencies are implementation details — you can refactor them freely. Communications with unmanaged dependencies are observable behavior — mocking protects against external changes.
 
@@ -162,20 +156,20 @@ test('renders sidebar', () => {
 
 ```typescript
 // BAD: Mock breaks test logic
-test("detects duplicate server", () => {
+test('detects duplicate server', () => {
   // Mock prevents config write that test depends on!
-  vi.mock("ToolCatalog", () => ({
-    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined),
+  vi.mock('ToolCatalog', () => ({
+    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
   }));
   await addServer(config);
-  await addServer(config); // Should throw - but won't!
+  await addServer(config);  // Should throw - but won't!
 });
 
 // GOOD: Mock at correct level
-test("detects duplicate server", () => {
-  vi.mock("MCPServerManager"); // Just mock slow server startup
-  await addServer(config); // Config written
-  await addServer(config); // Duplicate detected
+test('detects duplicate server', () => {
+  vi.mock('MCPServerManager'); // Just mock slow server startup
+  await addServer(config);  // Config written
+  await addServer(config);  // Duplicate detected
 });
 ```
 
@@ -188,23 +182,22 @@ Mock the COMPLETE data structure as it exists in reality:
 ```typescript
 // BAD: Partial mock
 const mockResponse = {
-  status: "success",
-  data: { userId: "123" },
+  status: 'success',
+  data: { userId: '123' }
   // Missing: metadata that downstream code uses
 };
 
 // GOOD: Mirror real API
 const mockResponse = {
-  status: "success",
-  data: { userId: "123", name: "Alice" },
-  metadata: { requestId: "req-789", timestamp: 1234567890 },
+  status: 'success',
+  data: { userId: '123', name: 'Alice' },
+  metadata: { requestId: 'req-789', timestamp: 1234567890 }
 };
 ```
 
 ### When Mocks Become Too Complex
 
 Warning signs:
-
 - Mock setup longer than test logic
 - Mocking everything to make test pass
 - Test breaks when mock changes
@@ -218,9 +211,7 @@ Consider integration tests with real components — often simpler than elaborate
 ```typescript
 // BAD: destroy() only used in tests
 class Session {
-  async destroy() {
-    /* cleanup */
-  }
+  async destroy() { /* cleanup */ }
 }
 
 // GOOD: Test utilities handle cleanup
@@ -242,14 +233,12 @@ Tests should not depend on execution order. But isolation doesn't mean cleaning 
 ### What to Clean Up
 
 **Long-lived resources MUST be cleaned up:**
-
 - Virtual machines, containers
 - Kubernetes jobs, pods, deployments
 - Cloud resources (instances, buckets)
 - Background processes, daemons
 
 **Prefer product tools for cleanup** when possible:
-
 ```typescript
 afterAll(async () => {
   // Use the product's own cleanup mechanisms
@@ -259,11 +248,10 @@ afterAll(async () => {
 ```
 
 **Side-channel cleanup** when product tools aren't available:
-
 ```typescript
 afterAll(async () => {
   // Direct cleanup when product doesn't provide it
-  await exec("kubectl delete job test-job-123");
+  await exec('kubectl delete job test-job-123');
 });
 ```
 
@@ -287,21 +275,20 @@ const user = await createUser({ email: `${testId}@test.com` });
 
 ## Quick Reference
 
-| Problem                           | Fix                                     |
-| --------------------------------- | --------------------------------------- |
-| Arbitrary setTimeout in tests     | Use condition-based waiting             |
-| Assert on mock elements           | Test real component or unmock           |
-| Mock third-party directly         | Create wrapper, mock wrapper            |
-| Test-only methods in production   | Move to test utilities                  |
-| Mock without understanding        | Understand dependencies first           |
-| Incomplete mocks                  | Mirror real API completely              |
-| Over-complex mocks                | Consider integration tests              |
+| Problem | Fix |
+|---------|-----|
+| Arbitrary setTimeout in tests | Use condition-based waiting |
+| Assert on mock elements | Test real component or unmock |
+| Mock third-party directly | Create wrapper, mock wrapper |
+| Test-only methods in production | Move to test utilities |
+| Mock without understanding | Understand dependencies first |
+| Incomplete mocks | Mirror real API completely |
+| Over-complex mocks | Consider integration tests |
 | Long-lived resources left running | Clean up VMs, k8s jobs, cloud resources |
 
 ## Red Flags
 
 **Stop and reconsider when you see:**
-
 - Arbitrary `setTimeout`/`sleep` without justification
 - Assertions on mock elements or test IDs
 - Methods only called in test files
@@ -313,7 +300,6 @@ const user = await createUser({ email: `${testId}@test.com` });
 ## TDD Connection
 
 TDD prevents most testing anti-patterns:
-
 - Write test first → forces thinking about what you're testing
 - Watch it fail → confirms test tests real behavior, not mocks
 - Minimal implementation → no test-only methods creep in
@@ -325,13 +311,13 @@ For certain patterns, property-based testing provides stronger coverage than exa
 
 ### When to Use PBT
 
-| Pattern             | Example                                | Why PBT                                |
-| ------------------- | -------------------------------------- | -------------------------------------- |
-| Serialization pairs | `encode`/`decode`, `toJSON`/`fromJSON` | Roundtrip property catches edge cases  |
-| Normalizers         | `sanitize`, `canonicalize`, `format`   | Idempotence property ensures stability |
-| Validators          | `is_valid`, `validate`                 | Valid-after-normalize property         |
-| Pure functions      | Business logic, calculations           | Multiple properties verify contract    |
-| Sorting/ordering    | `sort`, `rank`, `compare`              | Ordering + idempotence properties      |
+| Pattern | Example | Why PBT |
+|---------|---------|---------|
+| Serialization pairs | `encode`/`decode`, `toJSON`/`fromJSON` | Roundtrip property catches edge cases |
+| Normalizers | `sanitize`, `canonicalize`, `format` | Idempotence property ensures stability |
+| Validators | `is_valid`, `validate` | Valid-after-normalize property |
+| Pure functions | Business logic, calculations | Multiple properties verify contract |
+| Sorting/ordering | `sort`, `rank`, `compare` | Ordering + idempotence properties |
 
 ### When NOT to Use PBT
 

@@ -89,7 +89,10 @@ its existing code. Consumers adopting this gate should install the pinned
 Prettier version from this template, add `format` (`prettier --check .`) and
 `format:write` (`prettier --write .`) scripts, and adapt the two configuration
 files to their generated paths. Run `format:write` in a separate reviewed change
-before enabling the gate.
+before enabling the gate. Managed files are overwritten on every sync using the
+template's default Prettier style. Keep that style, or exclude the managed paths
+listed in the template's `ai-template.manifest.json` by adding them to the
+consumer's `.prettierignore` when choosing a different style.
 
 ### 5.2 Linting
 
@@ -162,7 +165,8 @@ In the template itself, `npm run audit:check` audits **all** dependencies at
 `--audit-level=high` instead of using `--omit=dev`. Every template dependency is
 a devDependency, but `@langchain/*` and `yaml` are loaded at run time by the
 orchestration scripts that consumers receive, so they are part of the shipped
-surface. ESLint, TypeScript and Prettier are build-time-only dependencies and are audited as well.
+surface. Build-time-only dependencies, including ESLint, TypeScript, Prettier,
+`@eslint/js`, `@types/node` and `globals`, are audited as well.
 
 ## 9. Review
 
