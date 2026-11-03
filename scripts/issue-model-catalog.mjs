@@ -15,7 +15,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { fetchRuntimeCatalog } from "./issue-runtime-adapters/catalog.mjs";
+import { fetchRuntimeCatalog, resolveRuntimeCli } from "./issue-runtime-adapters/catalog.mjs";
 import { DEFAULT_PROBE_TIMEOUT_MS, readCliVersion, runProcess, writeJsonAtomic } from "./issue-runtime-adapters/shared.mjs";
 import { findRuntime, isModelAllowed, isModelDenied, loadRuntimeRegistry } from "./ai-template/registry.mjs";
 
@@ -35,9 +35,13 @@ export const CATALOG_SCHEMA_VERSION = 1;
  *   adapters?: Record<string, Record<string, any>> }} CatalogOptions
  */
 
-/** Stable per-runtime fingerprint of the candidate list; capability caches compare it. */
+/**
+ * Stable per-runtime fingerprint of the candidate list; capability caches compare it.
+ * Labels count: an alias (`sonnet`) can keep its value while its label names a new generation.
+ */
 export function catalogEntryFingerprint(entry) {
-  const value = entry?.status === "ok" ? { cli: entry.cli?.path ?? null, models: entry.models.map(m => m.model) } : null;
+  const value = entry?.status === "ok"
+    ? { cli: entry.cli?.path ?? null, models: entry.models.map(m => [m.model, m.label]) } : null;
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
@@ -62,7 +66,8 @@ export async function readModelCatalog(filePath) {
 /**
  * Enabled runtime IDs whose entry must be re-listed: missing catalog or schema/registry
  * change (all), and per runtime a missing or failed entry, an entry older than
- * `maxAgeHours`, or a CLI whose path disappeared or whose `--version` changed.
+ * `maxAgeHours`, a CLI that now resolves to a different path (or none), or whose
+ * `--version` changed.
  * @param {ModelCatalog | null} catalog
  * @param {CatalogOptions} [options]
  */
@@ -75,11 +80,15 @@ export async function findStaleCatalogAgents(catalog, options = {}) {
   const now = (options.now ?? (() => new Date()))().getTime();
   const run = options.runProcess ?? runProcess;
   const stale = [];
-  for (const id of enabled) {
+  for (const runtime of registry.enabled) {
+    const id = runtime.id;
     const entry = catalog.agents[id];
     const refreshedAt = Date.parse(entry?.refreshedAt ?? "");
     if (!entry || entry.status !== "ok" || !Number.isFinite(refreshedAt) || now - refreshedAt >= maxAgeMs ||
         typeof entry.cli?.path !== "string" || !entry.cli.path) { stale.push(id); continue; }
+    // Re-resolve with the current environment: PATH may now select another installation.
+    const ctx = { ...options, ...(options.adapters?.[id] ?? options.adapters?.[runtime.name] ?? {}) };
+    if (await resolveRuntimeCli(runtime, ctx) !== entry.cli.path) { stale.push(id); continue; }
     try { await fs.access(entry.cli.path); } catch { stale.push(id); continue; }
     const version = await readCliVersion(entry.cli.path, { run, timeoutMs: options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, env: options.env });
     if (version !== (entry.cli.version ?? null)) stale.push(id);

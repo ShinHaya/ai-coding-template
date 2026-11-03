@@ -42,13 +42,14 @@ function fixture(t, agents) {
  */
 function fakeCli(root, state, calls = []) {
   return {
-    resolveExecutable: async (name) => (["opencode", "codex"].includes(name) ? path.join(root, "bin", name) : null),
+    resolveExecutable: async (name) => (["opencode", "codex"].includes(name) ? path.join(root, state.bin ?? "bin", name) : null),
     runProcess: async (cli, args) => {
       if (args.includes("--version")) return { code: 0, stdout: state.version ?? "fixture-v1" };
       calls.push([path.basename(cli), ...args]);
       if (args.includes("status")) return { code: 0, stdout: "Logged in" };
       if (path.basename(cli) === "codex")
-        return { code: 0, stdout: JSON.stringify({ models: state.models.map((slug) => ({ slug, display_name: slug.toUpperCase() })) }) };
+        return { code: 0, stdout: JSON.stringify({ models: state.models.map((slug) =>
+          ({ slug, display_name: state.labels?.[slug] ?? slug.toUpperCase() })) }) };
       return { code: 0, stdout: state.models.join("\n") };
     },
     headlessExecProbe: async ({ args }) => {
@@ -106,6 +107,21 @@ test("a catalog is re-listed only when missing, older than the max age, or its C
   assert.deepEqual(upgraded.refreshedAgents, ["codex", "opencode"]);
   const stored = await readModelCatalog(catalogPath);
   assert.equal(stored.agents.codex.cli.version, "fixture-v2");
+});
+
+test("a runtime is re-listed when its command now resolves to another installation that is still present", async (t) => {
+  const root = fixture(t, { enabled: ["opencode", "codex"] });
+  put(root, "other-bin/codex", "#!/bin/sh\nexit 0\n");
+  const catalogPath = path.join(root, "catalog.json");
+  const codex = { models: ["fiction-sol"] };
+  const cli = { ...fakeCli(root, { models: ["fiction/a"] }), adapters: { codex: fakeCli(root, codex) } };
+  await ensureModelCatalog({ cwd: root, catalogPath, ...cli });
+  codex.bin = "other-bin";
+  // The old executable still exists and reports the same version; only resolution changed.
+  assert.ok(fs.existsSync(path.join(root, "bin/codex")));
+  const moved = await ensureModelCatalog({ cwd: root, catalogPath, ...cli });
+  assert.deepEqual(moved.refreshedAgents, ["codex"]);
+  assert.equal((await readModelCatalog(catalogPath)).agents.codex.cli.path, path.join(root, "other-bin/codex"));
 });
 
 test("a failed listing is recorded with its reason and retried on the next run", async (t) => {
@@ -232,6 +248,14 @@ test("capability discovery re-probes only the agent whose catalog candidates cha
   assert.deepEqual(changed.catalogRefreshedAgents, ["codex", "opencode"]);
   assert.deepEqual(calls.filter((call) => call[0] === "probe").map((call) => call[1]), ["fiction/a", "fiction/b"]);
   assert.deepEqual([...new Set(changed.capabilities.map((record) => record.model))].sort(), ["fiction-sol", "fiction/a", "fiction/b"]);
+
+  // A label-only change (same value, CLI path and version) still re-probes that agent alone:
+  // an alias keeps its value while its label names a new generation.
+  codex.labels = { "fiction-sol": "Fiction Sol Next" };
+  calls.length = 0;
+  const relabeled = await loadOrRefreshCapabilities({ cwd: root, cachePath, refreshCatalog: true, ...cli });
+  assert.deepEqual(relabeled.reprobedAgents, ["Codex"]);
+  assert.deepEqual(calls.filter((call) => call[0] === "probe").map((call) => call[1]), ["fiction-sol"]);
 
   // A dry run neither writes the catalog nor the capability cache.
   const catalogBefore = fs.readFileSync(path.join(root, "state/model-catalog.json"), "utf8");

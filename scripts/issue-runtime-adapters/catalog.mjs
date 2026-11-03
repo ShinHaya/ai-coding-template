@@ -24,6 +24,23 @@ export function catalogSource(definition) {
 }
 
 /**
+ * The executable the runtime's commands resolve to in the current environment, or null.
+ * @param {Record<string, any>} definition
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, pathEnv?: string, cliPath?: string, resolveExecutable?: Function }} [ctx]
+ */
+export async function resolveRuntimeCli(definition, ctx = {}) {
+  if (definition.retired) return null;
+  const resolve = ctx.resolveExecutable ?? resolveExecutable;
+  const env = ctx.env ?? process.env;
+  for (const name of ctx.cliPath ? [ctx.cliPath] : definition.commands) {
+    if (isRetiredCommand(name, ctx.cwd)) continue;
+    const resolved = await resolve(name, { env, pathEnv: ctx.pathEnv });
+    if (resolved && !isRetiredCommand(resolved, ctx.cwd)) return resolved;
+  }
+  return null;
+}
+
+/**
  * @param {Record<string, any>} definition runtime definition from the registry
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, pathEnv?: string, timeoutMs?: number, cliPath?: string,
  *   runProcess?: typeof runProcess, resolveExecutable?: Function, spawn?: Function }} [ctx]
@@ -32,16 +49,10 @@ export function catalogSource(definition) {
 export async function fetchRuntimeCatalog(definition, ctx = {}) {
   const timeoutMs = ctx.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
   const run = ctx.runProcess ?? runProcess;
-  const resolve = ctx.resolveExecutable ?? resolveExecutable;
   const env = ctx.env ?? process.env;
   const source = catalogSource(definition);
   if (definition.retired) return { status: "failed", reason: REASON_CODES.CLI_NOT_FOUND, source };
-  let cliPath;
-  for (const name of ctx.cliPath ? [ctx.cliPath] : definition.commands) {
-    if (isRetiredCommand(name, ctx.cwd)) continue;
-    const resolved = await resolve(name, { env, pathEnv: ctx.pathEnv });
-    if (resolved && !isRetiredCommand(resolved, ctx.cwd)) { cliPath = resolved; break; }
-  }
+  const cliPath = await resolveRuntimeCli(definition, ctx);
   if (!cliPath) return { status: "failed", reason: REASON_CODES.CLI_NOT_FOUND, source };
   const failed = reason => ({ status: /** @type {const} */ ("failed"), reason, cliPath, source });
   if (definition.auth) {
