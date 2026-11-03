@@ -12,33 +12,33 @@
 
 ## 2. Functional Requirements
 
-| ID | Requirement | Priority | Status |
-| --- | --- | --- | --- |
-| REQ-001 |  |  |  |
+| ID      | Requirement | Priority | Status |
+| ------- | ----------- | -------- | ------ |
+| REQ-001 |             |          |        |
 
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
 
-| ID | Requirement | Target |
-| --- | --- | --- |
-| PERF-001 |  |  |
+| ID       | Requirement | Target |
+| -------- | ----------- | ------ |
+| PERF-001 |             |        |
 
 ### 3.2 Availability
 
-| ID | Requirement |
-| --- | --- |
-| AVAIL-001 |  |
+| ID        | Requirement |
+| --------- | ----------- |
+| AVAIL-001 |             |
 
 ### 3.3 Security
 
-| ID | Requirement |
-| --- | --- |
-| SEC-001 |  |
+| ID      | Requirement |
+| ------- | ----------- |
+| SEC-001 |             |
 
 ## 4. Use Cases
 
-### UC-001: 
+### UC-001:
 
 **Actor**:
 
@@ -50,7 +50,7 @@
 
 **Alternative Flows**:
 
-- 
+-
 
 ## 5. UI / API Design
 
@@ -78,6 +78,5 @@ rest and the derived key exists only in memory", "network egress is limited to
 ## 9. Glossary
 
 | Term | Definition |
-| --- | --- |
-|  |  |
-
+| ---- | ---------- |
+|      |            |

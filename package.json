@@ -8,6 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc -p tsconfig.json",
     "test:orchestrator": "node scripts/ai-template.mjs test",
@@ -22,6 +24,7 @@
     "@types/node": "^26.6.6",
     "eslint": "^10.14.0",
     "globals": "^17.13.0",
+    "prettier": "3.9.10",
     "typescript": "^7.0.2",
     "yaml": "^2.9.1"
   }

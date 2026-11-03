@@ -54,6 +54,8 @@ that setting is omitted. Follow its Issue worktree rules.
 
 Follow this workflow:
 
+<!-- Preserve workflow list spacing when integrating concurrent skill updates. -->
+<!-- prettier-ignore -->
 1. **Issue worktree start gate** (MUST — see above). Do not skip.
 2. Resolve repository settings with `node scripts/repository-config.mjs`.
    `repository.baseBranch` selects the trunk; when configuration is absent it
@@ -67,7 +69,7 @@ Follow this workflow:
 4. **Review before push or PR creation.** Dispatch a reviewer role from a
    **different** verified route using
    `node scripts/issue-dispatch.mjs --role reviewer
-   --execution-mode direct-review --review-pass 1` (plus the route, issue, release
+--execution-mode direct-review --review-pass 1` (plus the route, issue, release
    policy, and next-milestone flags). The reviewer works read-only in the existing
    Issue worktree: it reads the Issue acceptance criteria, changed file paths,
    `git diff origin/<baseBranch>..HEAD`, and the local test summary. No PR exists yet.
@@ -92,6 +94,14 @@ Follow this workflow:
    `same-route-reviewer:*` in the PR description. If route discovery fails,
    state that clearly and proceed without a reviewer pass; record this exception
    in the PR description.
+
+   **Role-program exception:** skip this whole step when you were dispatched as
+   the `implementer` role of an orchestrator role program (the prompt has a
+   `Role: implementer` line). The orchestrator runs the one review pass per
+   Issue as a separate reviewer role after the PR exists, so dispatching a
+   reviewer here would review the Issue twice. Go straight to step 5 and do not
+   claim a reviewer verdict in the PR description. Single-worker dispatches (no
+   `Role:` line) and direct human use of this skill keep this step.
 5. Push the branch to GitHub and create a PR with
    `gh pr create --base <baseBranch>`, using the configured branch resolved in
    step 2 even when GitHub has a different default branch. Include

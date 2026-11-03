@@ -11,10 +11,10 @@ only a few placeholder choices changed.
 
 ## 1. Why two layers
 
-| Layer | Tool | Blocks merges? | Scope | Catches |
-| --- | --- | --- | --- | --- |
-| Detection / updates | Dependabot | No (opens PRs) | All dependencies | Outdated + vulnerable deps, including build-time-only ones |
-| Enforcement gate | CI audit | Yes | Production deps (`<SCOPE>`) | New high/critical advisories in the **shipped** attack surface |
+| Layer               | Tool       | Blocks merges? | Scope                       | Catches                                                        |
+| ------------------- | ---------- | -------------- | --------------------------- | -------------------------------------------------------------- |
+| Detection / updates | Dependabot | No (opens PRs) | All dependencies            | Outdated + vulnerable deps, including build-time-only ones     |
+| Enforcement gate    | CI audit   | Yes            | Production deps (`<SCOPE>`) | New high/critical advisories in the **shipped** attack surface |
 
 The split matters: a gate that fails on **every** advisory anywhere in the tree goes
 permanently red the moment a build-time-only tool (linters, packagers, test runners)
@@ -64,7 +64,7 @@ Design choices, and why:
 - **Threshold = `--audit-level=high`.** Fail on `high` and `critical`; let `moderate`
   and below through to Dependabot. Raise to `critical` if even high is too noisy for
   your project, or lower if you want stricter enforcement.
-- **Wrap it in a script** so CI and any local gate call the *same* command (single
+- **Wrap it in a script** so CI and any local gate call the _same_ command (single
   source of truth):
 
   ```json
@@ -91,17 +91,17 @@ Enable automated update PRs across every ecosystem the repo uses.
 # .github/dependabot.yml
 version: 2
 updates:
-  - package-ecosystem: "<ECOSYSTEM>"   # e.g. npm
+  - package-ecosystem: "<ECOSYSTEM>" # e.g. npm
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    groups:                            # batch routine updates to cut PR noise
+    groups: # batch routine updates to cut PR noise
       dev-dependencies:
         dependency-type: "development"
       production-dependencies:
         dependency-type: "production"
-  - package-ecosystem: "github-actions"  # keep pinned action versions patched
+  - package-ecosystem: "github-actions" # keep pinned action versions patched
     directory: "/"
     schedule:
       interval: "weekly"

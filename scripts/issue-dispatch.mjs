@@ -33,8 +33,10 @@ import { selectorTargetsRoute } from "./issue-runtime-adapters/shared.mjs";
  */
 export async function dispatchWorker(input, ctx = {}) {
   const route = input?.route;
-  if (!route?.agent || !route?.model || !route?.selector) throw new Error("route-required");
-  if (route.selectable !== true || route.verifiable !== true) throw new Error("route-not-verified");
+  if (!route?.agent || !route?.model || !route?.selector)
+    throw new Error("route-required");
+  if (route.selectable !== true || route.verifiable !== true)
+    throw new Error("route-not-verified");
   if (!Number.isSafeInteger(route.timeoutMs) || route.timeoutMs <= 0)
     throw new Error("invalid-route-timeout");
   if (!Number.isSafeInteger(input.issueNumber) || input.issueNumber <= 0)
@@ -43,7 +45,8 @@ export async function dispatchWorker(input, ctx = {}) {
   if (!input.nextMilestone) throw new Error("next-milestone-required");
 
   // Ensure the selector still parses and still targets the same model token.
-  if (!selectorTargetsRoute(route, input.cwd ?? ctx.cwd)) throw new Error("model-mismatch");
+  if (!selectorTargetsRoute(route, input.cwd ?? ctx.cwd))
+    throw new Error("model-mismatch");
 
   // The role-scoped half of the job goes through the closed-payload builder,
   // so the deny-list guard runs on the live dispatch path, not only in tests.
@@ -62,7 +65,9 @@ export async function dispatchWorker(input, ctx = {}) {
           skill: input.skill,
           releasePolicy: input.releasePolicy,
           nextMilestone: input.nextMilestone,
-          ...(input.reviewPass === undefined ? {} : { reviewPass: input.reviewPass }),
+          ...(input.reviewPass === undefined
+            ? {}
+            : { reviewPass: input.reviewPass }),
           ...(input.fixCycle === undefined ? {} : { fixCycle: input.fixCycle }),
         });
 
@@ -79,7 +84,10 @@ export async function dispatchWorker(input, ctx = {}) {
   // Development-only Jev credentials belong to the triage child, never workers.
   const workerEnv = { ...(ctx.env ?? process.env) };
   delete workerEnv.TYPESAFE_API_KEY;
-  const handle = await launchWithAdapter(route.agent, job, { ...ctx, env: workerEnv });
+  const handle = await launchWithAdapter(route.agent, job, {
+    ...ctx,
+    env: workerEnv,
+  });
   return {
     agent: route.agent,
     model: route.model,
@@ -114,7 +122,8 @@ export function parseDispatchCliArgs(argv) {
     const key = valueFlags.get(flag);
     if (!key) throw new Error(`unknown-flag:${flag}`);
     const value = argv[++index];
-    if (value === undefined || value.startsWith("--")) throw new Error(`missing-flag-value:${flag}`);
+    if (value === undefined || value.startsWith("--"))
+      throw new Error(`missing-flag-value:${flag}`);
     options[key] = value;
   }
   if (!options.routeJson) throw new Error("route-json-required");
@@ -159,8 +168,12 @@ async function main() {
     cwd: cli.cwd,
     ...(cli.role === undefined ? {} : { role: cli.role }),
     ...(cli.skill === undefined ? {} : { skill: cli.skill }),
-    ...(cli.executionMode === undefined ? {} : { executionMode: cli.executionMode }),
-    ...(cli.reviewPass === undefined ? {} : { reviewPass: Number(cli.reviewPass) }),
+    ...(cli.executionMode === undefined
+      ? {}
+      : { executionMode: cli.executionMode }),
+    ...(cli.reviewPass === undefined
+      ? {}
+      : { reviewPass: Number(cli.reviewPass) }),
     ...(cli.fixCycle === undefined ? {} : { fixCycle: Number(cli.fixCycle) }),
   });
   process.stdout.write(
@@ -177,7 +190,11 @@ async function main() {
   const exitCode = dispatchExitCode(result);
   process.stdout.write(
     `${JSON.stringify({
-      status: result.timedOut ? "timeout" : exitCode === 0 ? "exited" : "failed",
+      status: result.timedOut
+        ? "timeout"
+        : exitCode === 0
+          ? "exited"
+          : "failed",
       code: result.code,
       signal: result.signal ?? null,
       timedOut: Boolean(result.timedOut),
@@ -187,9 +204,14 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   main().catch((error) => {
-    process.stderr.write(`${JSON.stringify({ status: "error", reason: error.message })}\n`);
+    process.stderr.write(
+      `${JSON.stringify({ status: "error", reason: error.message })}\n`,
+    );
     process.exitCode = 1;
   });
 }

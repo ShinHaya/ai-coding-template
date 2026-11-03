@@ -39,7 +39,7 @@ review criteria**. GitHub workflow rules live in
 
 ```bash
 # Install dependencies
-# (npm ci is needed only for the issue-* orchestration scripts)
+# (quality gates and the issue-* orchestration scripts)
 npm ci
 
 # Install the local Git hooks (once per clone)
@@ -73,8 +73,26 @@ bash scripts/setup-hooks.sh
 ### 5.1 Formatting
 
 ```bash
-# Format command
+# Check without changing files (also used by pre-commit and CI)
+npm run format
+# Apply formatting before staging changes
+npm run format:write
 ```
+
+Prettier is pinned in `devDependencies`. The hook only checks formatting; it never
+rewrites staged files. Generated output, lockfiles, dependencies, worktrees and
+local state are excluded by `.prettierignore`.
+
+Formatter configuration (`.prettierrc.json`, `.prettierignore`) is repo-owned,
+so template sync does not overwrite a consumer's formatting policy or reformat
+its existing code. Consumers adopting this gate should install the pinned
+Prettier version from this template, add `format` (`prettier --check .`) and
+`format:write` (`prettier --write .`) scripts, and adapt the two configuration
+files to their generated paths. Run `format:write` in a separate reviewed change
+before enabling the gate. Managed files are overwritten on every sync using the
+template's default Prettier style. Keep that style, or exclude the managed paths
+listed in the template's `ai-template.manifest.json` by adding them to the
+consumer's `.prettierignore` when choosing a different style.
 
 ### 5.2 Linting
 
@@ -103,7 +121,7 @@ npm run typecheck
 - Use fake data in examples, tests, screenshots, and fixtures.
 - When writing or reviewing tests, use the repo-local **`writing-good-tests`**
   skill ([`../skills/writing-good-tests/SKILL.md`](../skills/writing-good-tests/SKILL.md))
-  for *how* to write them. The test **strategy** (what to test, by layer) stays
+  for _how_ to write them. The test **strategy** (what to test, by layer) stays
   in [`testing.md`](testing.md).
 - Avoid committing generated output unless the project documents a reason to
   keep it under version control.
@@ -115,7 +133,9 @@ npm run typecheck
 Run the relevant checks before committing code:
 
 ```bash
-# format
+# format (read-only)
+npm run format
+# To fix formatting before staging: npm run format:write
 # lint
 npm run lint
 # typecheck
@@ -145,7 +165,8 @@ In the template itself, `npm run audit:check` audits **all** dependencies at
 `--audit-level=high` instead of using `--omit=dev`. Every template dependency is
 a devDependency, but `@langchain/*` and `yaml` are loaded at run time by the
 orchestration scripts that consumers receive, so they are part of the shipped
-surface. ESLint is the only build-time-only dependency and is audited as well.
+surface. Build-time-only dependencies, including ESLint, TypeScript, Prettier,
+`@eslint/js`, `@types/node` and `globals`, are audited as well.
 
 ## 9. Review
 
@@ -173,11 +194,11 @@ by [`issue-implementation`](../skills/issue-implementation/SKILL.md) or
 Each documentation review skill owns its criteria; this document only points to
 them so the two cannot drift:
 
-| Review | Target | Skill |
-| --- | --- | --- |
-| Requirements | diffs to [`requirements.md`](requirements.md) | [`requirements-review`](../skills/requirements-review/SKILL.md) |
+| Review       | Target                                           | Skill                                                           |
+| ------------ | ------------------------------------------------ | --------------------------------------------------------------- |
+| Requirements | diffs to [`requirements.md`](requirements.md)    | [`requirements-review`](../skills/requirements-review/SKILL.md) |
 | Architecture | [`architecture.md`](architecture.md) or its diff | [`architecture-review`](../skills/architecture-review/SKILL.md) |
-| Issue design | a detailed design in a GitHub Issue or PR | [`design-doc-review`](../skills/design-doc-review/SKILL.md) |
+| Issue design | a detailed design in a GitHub Issue or PR        | [`design-doc-review`](../skills/design-doc-review/SKILL.md)     |
 
 Record review results in the Issue or PR, not in repository files.
 

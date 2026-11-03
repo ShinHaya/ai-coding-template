@@ -198,9 +198,13 @@ const permissions = [
   "resourcemanager.projects.setIamPolicy",
 ];
 
-const { stdout } = await execFileAsync("gcloud", ["auth", "print-access-token"], {
-  env: { ...process.env, CLOUDSDK_ACTIVE_CONFIG_NAME: "example-observer" },
-});
+const { stdout } = await execFileAsync(
+  "gcloud",
+  ["auth", "print-access-token"],
+  {
+    env: { ...process.env, CLOUDSDK_ACTIVE_CONFIG_NAME: "example-observer" },
+  },
+);
 const token = stdout.trim();
 const response = await fetch(
   `https://cloudresourcemanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}:testIamPermissions`,

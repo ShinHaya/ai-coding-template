@@ -10,17 +10,17 @@ them — so a new project starts with the operating model already in place.
 
 ## What's in here
 
-| Area | What you get |
-| --- | --- |
-| Agent entry docs | `AGENTS.md` (canonical), `CLAUDE.md`, `GEMINI.md` sharing one identical instruction block |
-| Subagent definitions | `.claude/agents/`, `.agents/agents/` — a reasoning subagent and a mechanical-execution subagent |
-| Workflow skills | `skills/{create-issue,issue-implementation,handoff-issue,orchestrate-issues-implementation}`, linked from `.claude/skills/` and `.agents/skills/` |
-| Issue worktrees | `scripts/issue-worktree.sh` — one guarded worktree per Issue, with session leases and handoff epochs |
+| Area                            | What you get                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent entry docs                | `AGENTS.md` (canonical), `CLAUDE.md`, `GEMINI.md` sharing one identical instruction block                                                                                       |
+| Subagent definitions            | `.claude/agents/`, `.agents/agents/` — a reasoning subagent and a mechanical-execution subagent                                                                                 |
+| Workflow skills                 | `skills/{create-issue,issue-implementation,handoff-issue,orchestrate-issues-implementation}`, linked from `.claude/skills/` and `.agents/skills/`                               |
+| Issue worktrees                 | `scripts/issue-worktree.sh` — one guarded worktree per Issue, with session leases and handoff epochs                                                                            |
 | Reviewer role and orchestration | `scripts/issue-*.mjs` — verified agent/model route discovery, role dispatch (implementer / planner / reviewer), dependency-ordered multi-Issue plans, optional LangGraph runner |
-| Documentation review | `skills/{requirements,architecture,design-doc}-review` — review criteria owned by each skill |
-| Commit guards | `.githooks/pre-commit` quality gates; a Claude Code `PreToolUse` hook that blocks commits outside an Issue worktree |
-| Docs | `docs/` — requirements, architecture, development, testing, security, dependency security, GitHub operations |
-| CI | `shellcheck` for the hook and helper scripts; Dependabot config |
+| Documentation review            | `skills/{requirements,architecture,design-doc}-review` — review criteria owned by each skill                                                                                    |
+| Commit guards                   | `.githooks/pre-commit` quality gates; a Claude Code `PreToolUse` hook that blocks commits outside an Issue worktree                                                             |
+| Docs                            | `docs/` — requirements, architecture, development, testing, security, dependency security, GitHub operations                                                                    |
+| CI                              | `shellcheck` for the hook and helper scripts; Dependabot config                                                                                                                 |
 
 ## First edits
 
@@ -46,7 +46,7 @@ Then create the `priority:P0`–`priority:P3` labels described in
 
 ```bash
 bash scripts/setup-hooks.sh
-npm ci   # only needed for the scripts/issue-*.mjs orchestration tools
+npm ci   # installs quality-gate and orchestration tools
 ```
 
 `setup-hooks.sh` sets `git config --local core.hooksPath .githooks`, which

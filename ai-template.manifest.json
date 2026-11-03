@@ -1,5 +1,5 @@
 {
-  "$comment": "Template-owned (managed) paths copied to consumer repositories by `node scripts/ai-template.mjs sync`. Shared skills are listed by name so repository-owned skills can live beside them.",
+  "$comment": "Template-owned (managed) paths copied to consumer repositories by `node scripts/ai-template.mjs sync`. Shared skills are listed by name so repository-owned skills can live beside them. Formatter configuration (.prettierrc.json and .prettierignore) stays repo-owned so sync preserves consumer formatting policy and generated-path exclusions.",
   "version": 1,
   "managed": [
     "agents/**",

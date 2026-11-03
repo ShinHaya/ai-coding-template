@@ -64,9 +64,9 @@ Stop and report evidence when any of these is true:
 
 ## Red Flags
 
-| Temptation | Required response |
-| --- | --- |
-| “The remote branch is gone, so start over.” | Preserve and inspect the local worktree; it may contain unpublished work. |
-| “The lease expired, so takeover is automatically safe.” | Diagnose owner and Git operation before explicit handoff. |
-| “Stash or reset the dirty files first.” | Leave inherited WIP in place until it is understood. |
-| “PR is closed, so cleanup is safe.” | Cleanup requires GitHub state `MERGED` and all local safety checks. |
+| Temptation                                              | Required response                                                         |
+| ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| “The remote branch is gone, so start over.”             | Preserve and inspect the local worktree; it may contain unpublished work. |
+| “The lease expired, so takeover is automatically safe.” | Diagnose owner and Git operation before explicit handoff.                 |
+| “Stash or reset the dirty files first.”                 | Leave inherited WIP in place until it is understood.                      |
+| “PR is closed, so cleanup is safe.”                     | Cleanup requires GitHub state `MERGED` and all local safety checks.       |
