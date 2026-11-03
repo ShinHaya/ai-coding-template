@@ -20,14 +20,14 @@ files under `skills/`. Inspect runtime IDs with `node scripts/ai-template.mjs ag
 
 The workflow skills call these tools:
 
-| Tool                                                                                  | Used by                                                                     |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `scripts/issue-worktree.sh` (`create` / `status` / `handoff` / `release` / `cleanup`) | `issue-implementation`, `handoff-issue`                                     |
-| `scripts/issue-dispatch.mjs --role reviewer`                                          | `issue-implementation` (pre-PR review), `orchestrate-issues-implementation` |
-| `scripts/issue-orchestrator.mjs`, `issue-capabilities.mjs`, `issue-graph.mjs`         | `orchestrate-issues-implementation`                                         |
-| `scripts/issue-model-catalog.mjs` (`refresh` / `show`)                                | `refresh-model-catalog`, and automatically by `issue-capabilities.mjs`      |
-| `scripts/repository-config.mjs` (repository settings as data)                         | workflow and documentation review skills                                    |
-| `gh` (Issues, PRs, checks)                                                            | all workflow skills                                                         |
+| Tool                                                                                              | Used by                                                                     |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `scripts/issue-worktree.sh` (`create` / `status` / `acquire` / `handoff` / `release` / `cleanup`) | `issue-implementation`, `handoff-issue`                                     |
+| `scripts/issue-dispatch.mjs --role reviewer`                                                      | `issue-implementation` (pre-PR review), `orchestrate-issues-implementation` |
+| `scripts/issue-orchestrator.mjs`, `issue-capabilities.mjs`, `issue-graph.mjs`                     | `orchestrate-issues-implementation`                                         |
+| `scripts/issue-model-catalog.mjs` (`refresh` / `show`)                                            | `refresh-model-catalog`, and automatically by `issue-capabilities.mjs`      |
+| `scripts/repository-config.mjs` (repository settings as data)                                     | workflow and documentation review skills                                    |
+| `gh` (Issues, PRs, checks)                                                                        | all workflow skills                                                         |
 
 ## Documentation review skills
 

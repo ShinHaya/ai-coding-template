@@ -658,10 +658,11 @@ function roleInstructions({ role, issueNumber, skill, reviewPass, fixCycle }) {
 }
 
 /**
- * Build the minimal worker prompt — role, Issue number, and route labels
- * only. No Issue body, diff, or personal data ever enters the prompt.
+ * Build the minimal worker prompt — role, Issue number, route labels, and the
+ * non-sensitive lease session ID for a worker that owns the Issue worktree.
+ * No Issue body, diff, or personal data ever enters the prompt.
  * @param {{ issueNumber: number, agent: string, model: string, releasePolicy: string, nextMilestone: string,
- *   role?: string, skill?: string, reviewPass?: number, fixCycle?: number }} fields
+ *   role?: string, skill?: string, reviewPass?: number, fixCycle?: number, leaseSession?: string }} fields
  */
 export function buildWorkerPrompt({
   issueNumber,
@@ -673,7 +674,12 @@ export function buildWorkerPrompt({
   skill = "issue-implementation",
   reviewPass,
   fixCycle,
+  leaseSession,
 }) {
+  const lease =
+    leaseSession === undefined
+      ? []
+      : leaseInstructions({ issueNumber, agent, leaseSession });
   if (!role) {
     // Single-worker mode: one worker owns the whole Issue, as before roles.
     return [
@@ -682,6 +688,7 @@ export function buildWorkerPrompt({
       `Assigned route: agent=${agent} model=${model}`,
       `Release policy: ${releasePolicy}`,
       `Next milestone: ${nextMilestone}`,
+      ...lease,
       NO_STATE_LEAK_RULE,
     ].join("\n");
   }
@@ -692,6 +699,20 @@ export function buildWorkerPrompt({
     `Assigned route: agent=${agent} model=${model}`,
     `Release policy: ${releasePolicy}`,
     `Next milestone: ${nextMilestone}`,
+    ...lease,
     NO_STATE_LEAK_RULE,
   ].join("\n");
+}
+
+/**
+ * The dispatcher-issued lease session. Some runtimes run shell commands in a
+ * separate long-running server that does not inherit the worker's environment,
+ * so the session travels in the prompt as well as in ISSUE_WORKTREE_SESSION.
+ */
+function leaseInstructions({ issueNumber, agent, leaseSession }) {
+  return [
+    `Issue worktree lease session: ${leaseSession}`,
+    `Pass \`--session ${leaseSession}\` to every scripts/issue-worktree.sh create, acquire, handoff, and release call for Issue #${issueNumber}. The dispatcher renews this lease while you run; do not invent another session ID.`,
+    `Before each commit and each push, run \`bash scripts/issue-worktree.sh acquire ${issueNumber} --agent ${agent} --session ${leaseSession}\`. If it fails, stop without committing or pushing: another session has taken over the Issue.`,
+  ];
 }
