@@ -8,6 +8,11 @@ import {
   evaluateRoute,
   runtimeHasApprovedRoute,
 } from "../../scripts/enterprise-route-policy.mjs";
+import {
+  loadOrRefreshCapabilities,
+  verifyWorkerRoute,
+} from "../../scripts/issue-capabilities.mjs";
+import { PROBE_SCHEMA_VERSION } from "../../scripts/issue-runtime-adapters/shared.mjs";
 import { fetchRuntimeCatalog } from "../../scripts/issue-runtime-adapters/catalog.mjs";
 import { isDisallowedModelRoute } from "../../scripts/issue-runtime-adapters/shared.mjs";
 import { launchWithAdapter } from "../../scripts/issue-runtime-adapters/index.mjs";
@@ -298,4 +303,64 @@ test("benchmark runs are denied before any process in enterprise mode", async (t
     /route-benchmark-enterprise-denied/,
   );
   assert.equal(calls, 0);
+});
+
+test("a persisted capability cache is reused while attested, then rejected after revocation without any process", async (t) => {
+  const root = fixture(t, {
+    rec: record([route({ expiresOn: "2099-12-31" })]),
+  });
+  const registry = loadRuntimeRegistry(root);
+  const cachePath = path.join(root, "state/issue-capabilities.json");
+  const live = {
+    agent: "claude",
+    model: "fake-sonnet-1",
+    requestedModel: "sonnet",
+    role: "implementer",
+    selector: "/fake/claude --model sonnet",
+    timeoutMs: 1000,
+    selectable: true,
+    verifiable: true,
+  };
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  fs.writeFileSync(
+    cachePath,
+    JSON.stringify({
+      probeSchemaVersion: PROBE_SCHEMA_VERSION,
+      runtimeFingerprint: registry.fingerprint,
+      probedAt: new Date().toISOString(),
+      capabilities: [live],
+      diagnostics: [],
+      cli: {},
+    }),
+  );
+  let processes = 0;
+  const options = {
+    cwd: root,
+    cachePath,
+    catalogPath: path.join(root, "state/model-catalog.json"),
+    runProcess: async () => (processes++, { code: 1, stdout: "", stderr: "" }),
+    resolveExecutable: async () => {
+      processes++;
+      return null;
+    },
+    dryRun: true,
+  };
+  const reused = await loadOrRefreshCapabilities(options);
+  assert.equal(reused.reused, true);
+  assert.equal(reused.capabilities.length, 1);
+  // Revoke: the attestation expires (record edited on disk).
+  fs.writeFileSync(
+    path.join(root, ENTERPRISE_RECORD_PATH),
+    JSON.stringify(record([route({ expiresOn: "2020-01-01" })])),
+  );
+  processes = 0;
+  const revoked = await loadOrRefreshCapabilities(options);
+  assert.notEqual(revoked.reused, true);
+  assert.deepEqual(revoked.capabilities, []);
+  assert.equal(processes, 0);
+  assert.deepEqual(await verifyWorkerRoute(live, { cwd: root }), {
+    ok: false,
+    reason: "model-not-allowed",
+  });
+  assert.equal(processes, 0);
 });

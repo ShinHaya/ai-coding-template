@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { findRuntime } from "./ai-template/registry.mjs";
+import {
+  findRuntime,
+  loadRuntimeRegistry,
+  resolvePermission,
+} from "./ai-template/registry.mjs";
 import { evaluateRoute } from "./enterprise-route-policy.mjs";
 /**
  * Route benchmark for RouteEvidence.
@@ -23,6 +27,7 @@ import {
 } from "./issue-triage-contract.mjs";
 import {
   runProcess,
+  selectorHasPermissionArgs,
   splitSelector,
   reportedModels,
   writeJsonAtomic,
@@ -310,6 +315,13 @@ export async function runBenchmarkTask(
     for (const [name, content] of Object.entries(task.files))
       await fs.writeFile(path.join(sandbox, name), content);
     const tokens = splitSelector(route.selector);
+    if (selectorHasPermissionArgs(route, cwd))
+      throw new Error("route-permission-args-forbidden");
+    const runtime = findRuntime(route.agent, cwd, { enabledOnly: true });
+    // Benchmark tasks edit files, so they run with the implementer's argv like the probe.
+    const permissionArgs = runtime
+      ? resolvePermission(loadRuntimeRegistry(cwd), runtime).args
+      : [];
     const prompt = `${task.instruction}\nWork only on the files in the current directory. Do not ask questions. Do not explain your steps.`;
     const workerEnv = { ...env };
     delete workerEnv.TYPESAFE_API_KEY;
@@ -318,8 +330,8 @@ export async function runBenchmarkTask(
       tokens[0],
       [
         ...tokens.slice(1),
-        ...(findRuntime(route.agent, cwd, { enabledOnly: true })?.probeArgs ??
-          []),
+        ...permissionArgs,
+        ...(runtime?.probeArgs ?? []),
         prompt,
       ],
       {

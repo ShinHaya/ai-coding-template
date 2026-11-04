@@ -72,6 +72,9 @@ after a headless probe verifies them at run time.
    (`scripts/issue-dispatch.mjs --role reviewer`). The verdict
    (`PASS` / `NEEDS_REVISION` / `REJECTED`) is posted as an Issue comment;
    `NEEDS_REVISION` allows one fix pass that is not re-reviewed.
+   Workers do not skip CLI permission checks by default; each role runs with a
+   restricted permission profile where the CLI supports one. This is not OS
+   isolation (see `docs/security.md`).
 4. **Open the PR and watch CI**, with at most three bounded CI fix cycles.
 5. **Hand off** with the `handoff-issue` skill if the session ends or the agent
    changes. Inherited work in progress is preserved, never stashed or reset.

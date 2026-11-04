@@ -152,6 +152,32 @@ enabled nor disabled. Before use, verify each condition against current official
 sources and account settings, record the source type and an expiry, and re-verify
 on change. No network lookup is added.
 
+### Worker execution permissions
+
+Orchestrated workers run AI agent CLIs on the operator's own machine. The
+template distinguishes three levels and does not present one as another:
+
+- **Prompt-level rules** (for example "do not modify anything" in a reviewer
+  prompt) are instructions, not enforcement.
+- **CLI-enforced profiles** (`enforcement: cli`) make the agent CLI refuse
+  file-edit tools and commands outside an allow list. They do not isolate the
+  machine: an allowed command runs with the user's own file and credential
+  access, and allowed commands such as `gh ... comment`, `git push` or
+  `issue-worktree.sh` write or post by themselves.
+- **OS-level isolation** is not implemented. An Issue worktree is not a sandbox.
+  Only Codex `read-only` uses the CLI's OS sandbox.
+
+Bypass profiles are never a default and need an explicit repository-config
+opt-in per runtime. `inherited` profiles leave the decision to the user's CLI
+settings, and `requireEnforcement` can exclude them. A probe whose tool calls
+are denied fails (`permission-denied`), and an approval wait in a probe or a
+worker run hits the timeout. A dispatched worker run does not check its own
+output for denials: a CLI can refuse a tool call and still exit 0, so a denied
+write is caught only downstream (quality gates, PR checks, the milestone gate).
+The template never retries with looser permissions. Workers can still read project settings such as
+`.claude/settings.json`, and a `workspace-write` implementer can edit them;
+review such changes in the PR. Details: `development.md`, "Worker permissions".
+
 ## 7. Input And DOM Safety
 
 <!-- How externally-supplied data is validated and escaped at each boundary. -->
@@ -175,3 +201,18 @@ Run before a release, and whenever a change touches an item above:
       files; CI does not print cloud logs or tokens
 
 <!-- Add project-specific checklist items. -->
+
+## Runtime environment boundary
+
+AI runtime children receive OS basics and exact per-runtime environment opt-ins
+(see development.md, Runtime child environments). Unrelated parent credentials,
+TypeSafe credentials and parent worktree leases are excluded. Required settings
+fail before spawn, with closed reasons and no environment values in diagnostics.
+Allowing a name explicitly trusts that runtime with its value, including proxy
+credentials. Environment objects are never added to orchestration state.
+
+This is an environment inheritance boundary, not a sandbox: HOME authentication
+files, PATH executables, runtime configuration files, existing external servers
+and independently launched tools remain outside its protection. It neither
+rotates credentials nor guarantees that a malicious CLI cannot disclose an
+explicitly allowed value. Vendor authentication names have no default allowlist.

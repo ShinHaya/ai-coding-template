@@ -39,8 +39,25 @@ resume after interruption. -->
 - [ ] No sensitive value appears in logs
 - [ ] No unexpected network destination is contacted
 - [ ] Local state files have the intended permission bits
+- [ ] In a throwaway repository with fake data, a Claude worker started with the
+      `read-only` argv is denied a file write and exits without waiting for
+      approval; with the `workspace-write` argv it can edit a file in its working
+      directory but is denied a command outside its allow list (for example
+      `curl`)
+- [ ] No probe or dispatch argv contains `bypassPermissions`, `--dangerously-*`,
+      `--always-approve` or `--auto` unless the repository config opted in
 
 ## 5. Known limitations
 
 <!-- Behavior that is known-imperfect in this build, so a tester does not file
 it repeatedly. -->
+
+### Runtime environment configuration
+
+- With fake data, allow a required variable for one runtime and confirm its CLI
+  can start; remove it and confirm `runtime-env-required-missing` before spawn.
+- For a real CLI using HOME login or a corporate proxy/CA, configure only the
+  necessary variable names locally and check catalog, probe, worker and usage.
+  Record outcomes only, never values or raw CLI output.
+- Restart any externally managed server with the chosen environment policy;
+  do not infer isolation of its tools from this wrapper's checks.
