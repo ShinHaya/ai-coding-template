@@ -525,8 +525,8 @@ are not substitutes for that window.
   envelopes), or `exec-json` (exit 0 with one JSON document on stdout).
 - `command`: executable followed by literal arguments, executed without a shell.
   Commands come from trusted runtime definitions; review them before enabling a
-  repo-owned experimental runtime. They run with the repository cwd and inherited
-  environment, just like other runtime CLI operations.
+  repo-owned experimental runtime. They run with the repository cwd and the runtime child environment policy
+  described below.
 - `initialize`: optional `{method, params?}` request; `initialized`: optional
   notification method after its response (JSON-RPC only). `request` is required
   for both stdio protocols. These fields are forbidden for `exec-json`. IDs 1
@@ -659,3 +659,53 @@ matches a tracked regular file, that no managed path is a generated output, and
 that `sync/consumers.json` is valid. Template CI (`.github/workflows/ci.yml`)
 runs `check`, `test` and `scripts/test-issue-worktree.sh`. Delivery to consumers
 is described in [`github-operations.md`](github-operations.md) §13.
+
+## Runtime child environments
+
+Runtime auth, model listing, version checks, headless probes, workers and usage
+servers receive OS basics plus exact runtime-specific opt-ins. No vendor auth,
+proxy, CA, SSH agent or Node/shell execution variables are allowed by default.
+HOME-based CLI login still works; this does not isolate files or tools.
+
+Use `environment: { "inherit": [], "required": [] }` in a runtime declaration,
+or `agents.environment.<canonical-runtime-id>` in `.ai-template/config.json`.
+The two lists are combined with that runtime's declaration only. For example:
+
+```json
+{
+  "agents": {
+    "enabled": ["codex"],
+    "environment": {
+      "codex": {
+        "inherit": ["EXAMPLE_RUNTIME_TOKEN", "HTTPS_PROXY"],
+        "required": ["EXAMPLE_RUNTIME_TOKEN"]
+      }
+    }
+  }
+}
+```
+
+This example uses a fictional token name. Set only names required by your CLI's
+authentication and network configuration; keep values outside the repository.
+`required` must be a subset of `inherit`; missing or empty required values stop
+launch. Exact variable names only: no wildcards, prefixes, values or expansion.
+Unknown runtime IDs, aliases, duplicate names and unknown fields are rejected.
+`TYPESAFE_API_KEY` and the two `ISSUE_WORKTREE_*` lease variables cannot be opted
+in. The dispatcher creates a fresh lease only for owning workers. Heartbeat
+helpers use OS basics and their lease TTL/owner settings, without runtime auth.
+Git repository operations retain their existing authentication environment.
+
+OS basics are PATH, HOME, temporary-directory variables, LANG, LC_ALL, LC_CTYPE,
+TZ, TERM and the XDG config/cache/data/state/runtime directories. Windows also
+keeps USERPROFILE, HOMEDRIVE, HOMEPATH, APPDATA, LOCALAPPDATA, SystemRoot, WINDIR,
+ComSpec and PATHEXT; matching is case insensitive and conflicting case variants
+fail before launch. POSIX matching is case sensitive.
+
+Environment failures use closed reasons: `runtime-env-policy-invalid`,
+`runtime-env-required-missing`, `runtime-env-policy-required` and
+`runtime-env-key-collision`. Check the configured names and local values without
+printing them. A CLI authentication error retains its existing reason; the tools
+do not guess missing variable names or retry with the full parent environment.
+Externally started servers must be restarted by their owner with the same
+policy; this wrapper cannot change their environment or enforce their tool
+subprocess environments.

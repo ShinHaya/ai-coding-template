@@ -106,3 +106,18 @@ Run before a release, and whenever a change touches an item above:
       files; CI does not print cloud logs or tokens
 
 <!-- Add project-specific checklist items. -->
+
+## Runtime environment boundary
+
+AI runtime children receive OS basics and exact per-runtime environment opt-ins
+(see development.md, Runtime child environments). Unrelated parent credentials,
+TypeSafe credentials and parent worktree leases are excluded. Required settings
+fail before spawn, with closed reasons and no environment values in diagnostics.
+Allowing a name explicitly trusts that runtime with its value, including proxy
+credentials. Environment objects are never added to orchestration state.
+
+This is an environment inheritance boundary, not a sandbox: HOME authentication
+files, PATH executables, runtime configuration files, existing external servers
+and independently launched tools remain outside its protection. It neither
+rotates credentials nor guarantees that a malicious CLI cannot disclose an
+explicitly allowed value. Vendor authentication names have no default allowlist.

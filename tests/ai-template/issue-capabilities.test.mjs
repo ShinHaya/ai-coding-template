@@ -599,6 +599,16 @@ test("dispatches a non-Codex route with the exact probe selector and model", asy
   const bin = path.join(directory, "bin");
   await mkdir(bin);
   const marker = path.join(directory, "launched.json");
+  await mkdir(path.join(directory, ".ai-template"));
+  await writeFile(
+    path.join(directory, ".ai-template/config.json"),
+    JSON.stringify({
+      agents: {
+        enabled: ["grok"],
+        environment: { grok: { inherit: ["EXAMPLE_LAUNCH_MARKER"] } },
+      },
+    }),
+  );
   await makeFakeBin(
     bin,
     "grok",

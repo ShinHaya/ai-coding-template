@@ -326,7 +326,11 @@ test("lease heartbeat renews as the owner, survives failed beats, and stops clea
     ownerPid: 4242,
     intervalMs: 10,
     cwd: repoRoot,
-    env: { PATH: process.env.PATH },
+    env: {
+      PATH: process.env.PATH,
+      EXAMPLE_RUNTIME_TOKEN: "fake-runtime-value",
+      UNRELATED_SECRET: "fake-unrelated-value",
+    },
     runHelper: async (args, options) => {
       calls.push({ args, options });
       if (calls.length === 1) throw new Error("no lifecycle metadata yet");
@@ -343,6 +347,8 @@ test("lease heartbeat renews as the owner, survives failed beats, and stops clea
     "--heartbeat",
   ]);
   assert.equal(calls[0].options.env.ISSUE_WORKTREE_OWNER_PID, "4242");
+  assert.equal(calls[0].options.env.EXAMPLE_RUNTIME_TOKEN, undefined);
+  assert.equal(calls[0].options.env.UNRELATED_SECRET, undefined);
   assert.equal(calls[0].options.cwd, repoRoot);
   await new Promise((resolve) => setTimeout(resolve, 60));
   assert.equal(calls.length, stoppedAt);

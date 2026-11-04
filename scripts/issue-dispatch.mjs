@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { buildRuntimeEnvironment } from "./issue-runtime-adapters/environment.mjs";
 
 /**
  * Dispatch a single issue worker on a verified capability route.
@@ -30,6 +31,7 @@ import {
   findRuntime,
   loadRuntimeRegistry,
   resolvePermission,
+  runtimeEnvironment,
   runtimePermissionSummary,
 } from "./ai-template/registry.mjs";
 
@@ -120,7 +122,13 @@ export function startLeaseHeartbeat({
   env = process.env,
   runHelper = runWorktreeHelper,
 }) {
-  const helperEnv = { ...env, ISSUE_WORKTREE_OWNER_PID: String(ownerPid) };
+  const helperEnv = {
+    ...buildRuntimeEnvironment({ parentEnv: env }),
+    ISSUE_WORKTREE_OWNER_PID: String(ownerPid),
+    ...(env.ISSUE_WORKTREE_LEASE_TTL_SEC
+      ? { ISSUE_WORKTREE_LEASE_TTL_SEC: env.ISSUE_WORKTREE_LEASE_TTL_SEC }
+      : {}),
+  };
   const args = [
     "acquire",
     String(issueNumber),
@@ -206,12 +214,10 @@ export async function dispatchWorker(input, ctx = {}) {
           ...(input.fixCycle === undefined ? {} : { fixCycle: input.fixCycle }),
         });
 
-  // Development-only Jev credentials belong to the triage child, never workers.
-  const workerEnv = { ...(ctx.env ?? process.env) };
-  delete workerEnv.TYPESAFE_API_KEY;
-  // A lease inherited from an enclosing session belongs to that session only.
-  delete workerEnv.ISSUE_WORKTREE_SESSION;
-  delete workerEnv.ISSUE_WORKTREE_OWNER_PID;
+  const workerEnv = runtimeEnvironment(
+    findRuntime(route.agent, input.cwd ?? ctx.cwd) ?? { name: route.agent },
+    { ...ctx, cwd: input.cwd ?? ctx.cwd },
+  );
 
   const ownsLease = roleOwnsWorktreeLease(input.role);
   const leaseSession = ownsLease
@@ -219,7 +225,7 @@ export async function dispatchWorker(input, ctx = {}) {
     : undefined;
   const ownerPid = ctx.ownerPid ?? process.pid;
   const heartbeatIntervalMs = ownsLease
-    ? leaseHeartbeatIntervalMs(workerEnv)
+    ? leaseHeartbeatIntervalMs(ctx.env ?? process.env)
     : undefined;
   if (ownsLease) {
     // The env reaches a CLI-spawned worker's shell; the prompt carries the
@@ -242,6 +248,7 @@ export async function dispatchWorker(input, ctx = {}) {
   const handle = await launchWithAdapter(route.agent, job, {
     ...ctx,
     env: workerEnv,
+    leaseOwnerPid: ownerPid,
   });
   const heartbeat = ownsLease
     ? (ctx.startLeaseHeartbeat ?? startLeaseHeartbeat)({
@@ -250,7 +257,7 @@ export async function dispatchWorker(input, ctx = {}) {
         ownerPid,
         intervalMs: heartbeatIntervalMs,
         cwd: input.cwd ?? ctx.cwd,
-        env: workerEnv,
+        env: ctx.env ?? process.env,
       })
     : undefined;
   // Heartbeats last exactly as long as the worker: stop on exit or spawn error.

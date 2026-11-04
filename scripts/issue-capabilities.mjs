@@ -30,6 +30,7 @@ import {
 import { discoverAllCapabilities } from "./issue-runtime-adapters/index.mjs";
 
 import {
+  runtimeEnvironment,
   loadRuntimeRegistry,
   findRuntime,
   isRetiredCommand,
@@ -121,10 +122,16 @@ export async function discoverCapabilities(options = {}) {
   const cli = {};
   for (const [agentName, meta] of Object.entries(result.cli ?? {})) {
     if (typeof meta?.path !== "string" || !meta.path) continue;
+    const runtime = findRuntime(agentName, options.cwd);
     const version = await readCliVersion(meta.path, {
       run,
       timeoutMs,
-      env: options.env,
+      env: runtimeEnvironment(runtime ?? { name: agentName }, {
+        ...options,
+        ...(options.adapters?.[agentName] ??
+          options.adapters?.[runtime?.id] ??
+          {}),
+      }),
     });
     cli[agentName] = { path: meta.path, ...(version ? { version } : {}) };
   }
@@ -166,6 +173,8 @@ async function findStaleCachedAgents(
   cliMeta,
   {
     env,
+    cwd,
+    adapters,
     timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
     runProcess: run = runProcess,
   } = {},
@@ -185,7 +194,22 @@ async function findStaleCachedAgents(
     // Same budget discoverCapabilities used to record `meta.version`:
     // a shorter default here would read `null` for a
     // slow-but-unchanged CLI, judge it stale, and re-probe every run forever.
-    const version = await readCliVersion(meta.path, { run, timeoutMs, env });
+    let version;
+    try {
+      const runtime = findRuntime(agentName, cwd);
+      version = await readCliVersion(meta.path, {
+        run,
+        timeoutMs,
+        env: runtimeEnvironment(runtime ?? { name: agentName }, {
+          env,
+          cwd,
+          ...(adapters?.[agentName] ?? adapters?.[runtime?.id] ?? {}),
+        }),
+      });
+    } catch {
+      stale.push(agentName);
+      continue;
+    }
     if (version !== (meta.version ?? null)) stale.push(agentName);
   }
   return stale;

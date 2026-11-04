@@ -1,3 +1,4 @@
+import { buildRuntimeEnvironment } from "./environment.mjs";
 import {
   findRuntime,
   isModelAllowed,
@@ -59,7 +60,7 @@ const TTY_REQUIRED_PATTERN =
  */
 export async function resolveExecutable(
   command,
-  { env = process.env, pathEnv } = {},
+  { env = buildRuntimeEnvironment(), pathEnv } = {},
 ) {
   if (typeof command !== "string" || !command.trim()) return null;
   if (command.includes("/") || command.includes("\\")) {
@@ -103,12 +104,13 @@ export function runProcess(
   args,
   {
     timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
-    env = process.env,
+    env,
     cwd,
     input,
     killSignal = "SIGTERM",
   } = {},
 ) {
+  if (!env) return Promise.reject(new Error("runtime-env-policy-required"));
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     return Promise.reject(new Error("invalid-timeout-ms"));
   }
@@ -144,7 +146,9 @@ export function runProcess(
       if (!child.pid) return;
       try {
         if (process.platform === "win32") {
-          spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+          spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+            env: buildRuntimeEnvironment(),
+          });
         } else {
           child.kill(signal);
         }
@@ -225,7 +229,7 @@ export async function runHeadlessExecProbe({
   resolveModel = false,
   run = runProcess,
   timeoutMs = DEFAULT_HEADLESS_PROBE_TIMEOUT_MS,
-  env = process.env,
+  env = buildRuntimeEnvironment(),
 } = {}) {
   const sandboxDir = await fs.mkdtemp(
     path.join(os.tmpdir(), "headless-probe-"),
@@ -328,7 +332,7 @@ export async function verifyModelCandidate(candidate, ctx = {}) {
       run: ctx.run ?? runProcess,
       timeoutMs:
         ctx.headlessProbeTimeoutMs ?? DEFAULT_HEADLESS_PROBE_TIMEOUT_MS,
-      env: ctx.env ?? process.env,
+      env: ctx.env ?? buildRuntimeEnvironment(),
     });
     if (result?.ok === true) {
       if (ctx.resolveModel !== true) return { ok: true };
@@ -475,7 +479,11 @@ export function diagnostic({ agent, status, reason, model } = {}) {
  */
 export async function readCliVersion(
   cliPath,
-  { run = runProcess, timeoutMs = 10_000, env = process.env } = {},
+  {
+    run = runProcess,
+    timeoutMs = 10_000,
+    env = buildRuntimeEnvironment(),
+  } = {},
 ) {
   try {
     const result = await run(cliPath, ["--version"], { timeoutMs, env });
@@ -492,7 +500,10 @@ export async function readCliVersion(
  */
 export async function getRepositoryCommit(cwd) {
   try {
-    const result = await runProcess("git", ["rev-parse", "HEAD"], { cwd });
+    const result = await runProcess("git", ["rev-parse", "HEAD"], {
+      cwd,
+      env: process.env,
+    });
     if (result.code !== 0) return null;
     return String(result.stdout ?? "").trim() || null;
   } catch {
@@ -509,6 +520,7 @@ export async function verifyRepositoryFreshness(cwd) {
   const baseRef = `origin/${baseBranch}`;
   const fetchResult = await runProcess("git", ["fetch", "origin", baseBranch], {
     cwd,
+    env: process.env,
   });
   if (fetchResult.code !== 0) {
     throw new Error("orchestrator-checkout-stale:fetch-failed");
@@ -517,11 +529,17 @@ export async function verifyRepositoryFreshness(cwd) {
   const mergeBaseResult = await runProcess(
     "git",
     ["merge-base", "--is-ancestor", baseRef, "HEAD"],
-    { cwd },
+    { cwd, env: process.env },
   );
   if (mergeBaseResult.code !== 0) {
-    const headResult = await runProcess("git", ["rev-parse", "HEAD"], { cwd });
-    const baseResult = await runProcess("git", ["rev-parse", baseRef], { cwd });
+    const headResult = await runProcess("git", ["rev-parse", "HEAD"], {
+      cwd,
+      env: process.env,
+    });
+    const baseResult = await runProcess("git", ["rev-parse", baseRef], {
+      cwd,
+      env: process.env,
+    });
 
     const formatSha = (res) => {
       const out = String(res.stdout ?? "").trim();
@@ -564,11 +582,8 @@ export async function writeJsonAtomic(filePath, value) {
  * @param {string[]} args
  * @param {{ timeoutMs?: number, env?: NodeJS.ProcessEnv, cwd?: string }} [options]
  */
-export function spawnWorker(
-  command,
-  args,
-  { timeoutMs, env = process.env, cwd } = {},
-) {
+export function spawnWorker(command, args, { timeoutMs, env, cwd } = {}) {
+  if (!env) throw new Error("runtime-env-policy-required");
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("invalid-timeout-ms");
   }
@@ -590,7 +605,9 @@ export function spawnWorker(
     if (!child.pid) return;
     try {
       if (process.platform === "win32") {
-        spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+        spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+          env: buildRuntimeEnvironment(),
+        });
       } else {
         process.kill(-child.pid, signal);
       }

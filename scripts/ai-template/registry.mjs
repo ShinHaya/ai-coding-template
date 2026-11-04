@@ -1,3 +1,8 @@
+import {
+  buildRuntimeEnvironment,
+  mergeEnvironmentPolicies,
+  validateEnvironmentPolicy,
+} from "../issue-runtime-adapters/environment.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +55,13 @@ export function loadRuntimeRegistry(root = process.cwd()) {
   );
   const configFile = path.join(root, ".ai-template/config.json");
   const config = fs.existsSync(configFile) ? readJson(configFile) : {};
+  if (config.agents && Object.hasOwn(config.agents, "environment")) {
+    const policies = config.agents.environment;
+    if (!policies || typeof policies !== "object" || Array.isArray(policies))
+      throw new Error("runtime-env-policy-invalid");
+    for (const policy of Object.values(policies))
+      validateEnvironmentPolicy(policy);
+  }
   validateSchema(config, configSchema);
   loadRepositoryConfig(root); // Repository settings retain their separate strict contract.
   const runtimes = [];
@@ -65,6 +77,7 @@ export function loadRuntimeRegistry(root = process.cwd()) {
       .filter((f) => f.endsWith(".json"))
       .sort()) {
       const runtime = readJson(path.join(directory, file));
+      validateEnvironmentPolicy(runtime.environment);
       validateSchema(runtime, schema, file);
       validateUsageDefinition(runtime.usage);
       if (runtime.usage && runtime.usageUnavailable)
@@ -166,6 +179,17 @@ export function loadRuntimeRegistry(root = process.cwd()) {
     aliases,
     enabled,
   });
+  for (const [id, policy] of Object.entries(config.agents?.environment ?? {})) {
+    const runtime = aliases.get(id);
+    if (!runtime || runtime.id !== id || runtime.retired)
+      throw new Error("runtime-env-policy-invalid");
+    validateEnvironmentPolicy(policy);
+  }
+  for (const runtime of runtimes)
+    runtime.environment = mergeEnvironmentPolicies(
+      runtime.environment,
+      config.agents?.environment?.[runtime.id],
+    );
   const fingerprint = createHash("sha256")
     .update(
       JSON.stringify({
@@ -504,4 +528,18 @@ export function permissionFingerprintFor(agent, root = process.cwd()) {
   return runtime && registry.enabled.includes(runtime)
     ? runtimePermissionSummary(registry, runtime).fingerprint
     : null;
+}
+
+/** Resolve overrides by canonical runtime ID, including for caller-supplied definitions. */
+export function runtimeEnvironment(definition, ctx = {}, lease = undefined) {
+  const registered = findRuntime(definition.id ?? definition.name, ctx.cwd);
+  const policy = mergeEnvironmentPolicies(
+    definition.environment,
+    registered?.environment,
+  );
+  return buildRuntimeEnvironment({
+    parentEnv: ctx.env ?? process.env,
+    policy,
+    lease,
+  });
 }

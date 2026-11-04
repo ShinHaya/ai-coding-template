@@ -460,6 +460,28 @@
       },
       "required": ["flags", "profiles"],
       "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "inherit": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "uniqueItems": true
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
