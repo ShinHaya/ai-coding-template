@@ -40,6 +40,15 @@ stateful features (prompt caching, stored threads, memory) are permitted. -->
 
 <!-- Every allowed egress target and why it is allowed. -->
 
+### Borrowed machines and undecided repositories
+
+Do not post company Issue content to personal or public repositories, and do
+not send company data to a model provider the company has not allowed.
+Real-model probes send prompts externally and consume quota; run them with
+fake data only. Check `GITHUB_REPOSITORY` against `gh repo view` before any
+Issue or PR is created. Never auto-delete credentials or unmerged work when
+leaving. Procedure: [`development.md`](development.md) §12.
+
 ### Read-only cloud observation
 
 A repository that deploys to a cloud provider investigates a failed deploy
