@@ -38,7 +38,7 @@ step. -->
 
 ## 3. Failure and interruption paths
 
-- [ ] After stopping a worker, `.worktrees/issue-*` WIP is intact
+- [ ] Stopping a worker with the §12.5 procedure stops only the owned process group, and `.worktrees/issue-*` WIP is intact (fake-data run only)
 - [ ] `handoff` resumes it from a new session without a duplicate worktree
 - [ ] After login expiry or quota exhaustion, work resumes via `handoff-issue`
 - [ ] On leaving, local worktrees, `state/` and CLI logins were reviewed

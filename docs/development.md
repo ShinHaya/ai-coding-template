@@ -314,16 +314,18 @@ optional detail.
    echo "${GITHUB_REPOSITORY:-<unset>}"
    ```
 
-   `GITHUB_REPOSITORY` overrides the repository detected from the checkout
-   (§10). If it is set and differs from `nameWithOwner`, run `unset
-GITHUB_REPOSITORY` or fix it before continuing; otherwise Issues and PRs
-   go to the wrong repository.
+   `GITHUB_REPOSITORY` decides which repository the orchestrator and dispatcher
+   read Issues from (§10). `gh issue create` and `gh pr create` write to the
+   checkout's remote instead. Both must name the same repository. If
+   `GITHUB_REPOSITORY` is set and differs from `nameWithOwner`, run
+   `unset GITHUB_REPOSITORY` or correct it before continuing, so Issue selection
+   and dispatch do not point at a different repository.
 
 4. **Inspect what already exists** before applying the template: existing
    `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`, `.githooks/` and `core.hooksPath`,
    `.github/workflows/`, and branch protection. Do not overwrite them and do
-   not run `ai-template.mjs sync --adopt` on a company repository without
-   explicit approval; `sync` is a reviewed change, not a setup step. Do not
+   not run `ai-template.mjs sync --from <template> --adopt` on a company repository
+   without explicit approval; `sync` is a reviewed change, not a setup step. Do not
    register the repository with any sync target without approval.
 5. **Install** per §2.2 (`bash scripts/setup-hooks.sh`, `npm ci`). If
    `setup-hooks.sh` stops because `core.hooksPath` is already set, leave it and
@@ -331,27 +333,51 @@ GITHUB_REPOSITORY` or fix it before continuing; otherwise Issues and PRs
 
 ### 12.2 Two repository cases
 
-| Case                               | Do                                                                                                                | Do not                                                              |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Company's existing repository      | Follow its rules first; add the template only in a branch/PR they approve; use the company-approved identity.     | Overwrite its agent files, hooks or CI; push or open PRs unapproved |
-| Your own working repository (fake) | Use fake data only; rehearse the workflow; keep it private if any company-derived wording could appear in Issues. | Mirror company Issue content into it                                |
+| Case                                                    | Do                                                                                                                                         | Do not                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Company's existing repository                           | Follow its rules first; add the template only in a branch/PR they approve; use the company-approved identity.                              | Overwrite its agent files, hooks or CI; push or open PRs unapproved    |
+| Your own private repository, with company authorization | Real trial work only with explicit company approval of the repository, its visibility and data handling. Record that approval outside Git. | Start real trial work, or copy company material, without that approval |
+| Your own working repository (fake)                      | Use fake data only; rehearse the workflow; keep it private if any company-derived wording could appear in Issues.                          | Mirror company Issue content into it; copy company material            |
+
+If the company has not authorized your private repository for this data, use
+the fake-data rows only and do not copy company material into it. The
+rehearsal in §12.3 stays fake-data-only in every case.
 
 ### 12.3 Rehearsal with fake data
 
 Rehearse in a throwaway repository you own, with invented Issue text.
 Distinguish the two kinds of check:
 
-- **Read-only preparation** (no model is executed, no repository text is
-  sent): `gh auth status`, `node scripts/repository-config.mjs`,
-  `node scripts/issue-model-catalog.mjs refresh` and `show` (lists models
-  only), `node scripts/issue-orchestrator.mjs --issues <n> --dry-run`, and the
-  quality gates in §8.
-- **Paid / outbound probes** (execute a real model and send prompts to the
-  provider; cost quota and transmit the probe prompt): `node
-scripts/issue-capabilities.mjs` (probes each candidate route) and any real
-  `issue-dispatch.mjs` / orchestrator run. Run them only with fake data, only
+- **Read-only preparation** (no model is executed, no prompt is sent, no
+  repository text leaves the machine): `gh auth status`,
+  `gh repo view --json nameWithOwner,visibility,viewerPermission`,
+  `node scripts/repository-config.mjs`, `node scripts/issue-model-catalog.mjs show`,
+  and the quality gates in §8.
+- **Paid / outbound commands** (they execute a real model or send prompts to
+  the provider, and cost quota): `node scripts/issue-model-catalog.mjs refresh`
+  (lists models from each CLI and writes `state/model-catalog.json`),
+  `node scripts/issue-capabilities.mjs` (probes each candidate route),
+  `node scripts/issue-orchestrator.mjs --dry-run` (it runs capability
+  discovery when no capabilities file is given, so it can probe), and any real
+  `issue-dispatch.mjs` or orchestrator run. Run them only with fake data, only
   after the company's AI-use rules allow the provider, and record that you
   did.
+
+The orchestrator dry run uses the same parent-route flags as §10, and it must
+be given a current capabilities file so that it does not probe:
+
+```bash
+node scripts/issue-orchestrator.mjs --issues <fake-issue-numbers> --dry-run \
+  --capabilities-file state/issue-capabilities.json \
+  --max-parallel 1 --release-policy merged \
+  --parent-agent <agent> --parent-model <model>
+```
+
+Without `--parent-agent` and `--parent-model`, the command stops with
+`parent-route-required`; discovery runs before that check, so omitting them can
+still spend probe quota. `--skip-capability-discovery` also skips probing, but
+it is used only when no capabilities file is given, and that plan has no
+verified routes.
 
 The rehearsal confirms: CLI authentication, a verified model route, worktree
 creation (`scripts/issue-worktree.sh create`), an independent reviewer on a
@@ -371,11 +397,30 @@ different route, and passing quality gates.
   then resume with [`handoff-issue`](../skills/handoff-issue/SKILL.md)
   (`bash scripts/issue-worktree.sh status <issue> --json`, then `handoff`). Do
   not create a second worktree and do not discard inherited WIP.
-- **Stopping running workers**: stop the orchestrator/dispatcher process you
-  started (interrupt it in its terminal, or kill that PID). Ask before
-  stopping shared agent daemons or other sessions' processes. Stopping a
-  worker does not delete the worktree; the lease expires (§ lease TTL) and
-  `handoff` takes it over later.
+- **Stopping running workers**: the dispatcher does not forward SIGINT or
+  SIGTERM to its workers, and each worker runs in its own detached process group
+  whose ID equals the worker PID. Interrupting or killing only the dispatcher can
+  leave a worker running. To stop a run:
+  1. Find the dispatcher and worker processes you started, for example
+     `ps -axo pid,ppid,pgid,command | grep -E 'issue-(dispatch|orchestrator)|<worker-command>'`.
+     Match the worker by its parent PID (the dispatcher) and its worktree path
+     from `status <issue> --json`. Do not match on the agent name alone.
+  2. Send SIGTERM to the worker's process group, `kill -TERM -<pgid>`, and then to
+     the dispatcher PID. Do not send it to a shared daemon.
+  3. Check that nothing is left: `ps -g <pgid>` shows no processes, and the
+     dispatcher PID is gone.
+  4. Check that the WIP is intact: `status <issue> --json` still shows the same
+     `head`, the `dirty` state you recorded, and `git_operation: none`.
+
+  Ask before stopping shared agent daemons (such as `codex app-server` or
+  `opencode serve`) or other sessions' processes. Stopping a worker does not
+  delete the worktree. The lease expires after `ISSUE_WORKTREE_LEASE_TTL_SEC`
+  seconds (1 hour by default). Once it has expired, `handoff` can take it over
+  even if the recorded PID is still running. See
+  [`github-operations.md`](github-operations.md) §2.
+  This procedure is written from the launcher code and has not been run against
+  a live worker; a real stop test is still open.
+
 - **Release the lease** when you are done with an Issue you will not resume:
   `bash scripts/issue-worktree.sh release <issue> --session <id>`.
 
