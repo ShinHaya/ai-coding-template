@@ -236,3 +236,66 @@ test("route guard and launch reject unattested routes and missing purpose", asyn
   );
   assert.equal(spawned, 0);
 });
+
+test("display-name model labels with spaces can be attested", (t) => {
+  const root = fixture(t, {
+    rec: record([
+      route({
+        runtime: "codex",
+        requestedModel: "GPT Test",
+        canonicalModel: "GPT Test",
+      }),
+    ]),
+  });
+  assert.deepEqual(
+    ask(root, {
+      runtime: "codex",
+      requestedModel: "GPT Test",
+      model: "GPT Test",
+    }),
+    { allow: true },
+  );
+  assert.equal(
+    ask(root, {
+      runtime: "codex",
+      requestedModel: "GPT  Test",
+      model: "GPT Test",
+    }).allow,
+    false,
+  );
+});
+
+test("an invalid enterprise config shape is not treated as mode off", (t) => {
+  const root = fixture(t, { enterprise: false });
+  fs.writeFileSync(
+    path.join(root, ".ai-template/config.json"),
+    JSON.stringify({ enterprise: { routeAttestation: "true" } }),
+  );
+  assert.equal(ask(root).allow, false);
+});
+
+test("benchmark runs are denied before any process in enterprise mode", async (t) => {
+  const { runBenchmarkTask } =
+    await import("../../scripts/issue-route-benchmark.mjs");
+  const root = fixture(t, { rec: record() });
+  let calls = 0;
+  const run = async () => {
+    calls++;
+    return { code: 0 };
+  };
+  const task = { kind: "fix", files: {}, instruction: "x" };
+  await assert.rejects(
+    runBenchmarkTask(
+      {
+        agent: "claude",
+        model: "fake-sonnet-1",
+        requestedModel: "sonnet",
+        selector: "claude --model sonnet",
+      },
+      task,
+      { run, cwd: root },
+    ),
+    /route-benchmark-enterprise-denied/,
+  );
+  assert.equal(calls, 0);
+});

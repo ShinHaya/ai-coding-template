@@ -11,7 +11,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 
 export const ENTERPRISE_RECORD_PATH = "state/enterprise-route-attestation.json";
 export const RECORD_VERSION = 1;
@@ -49,6 +48,9 @@ export const DENY_REASONS = Object.freeze({
 });
 
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+/** Model labels may be CLI display names (for example "GPT Test", "Grok 4.5"): single spaces allowed. */
+const MODEL_LABEL =
+  /^[A-Za-z0-9][A-Za-z0-9._:/()+-]*(?: [A-Za-z0-9._:/()+-]+)*$/;
 const VALUE = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EVIDENCE = /^[A-Za-z0-9][A-Za-z0-9 ._:/#-]{0,159}$/;
@@ -69,17 +71,24 @@ export function isEnterpriseMode(root = process.cwd()) {
   const file = path.join(path.resolve(root), ".ai-template/config.json");
   if (!fs.existsSync(file)) return false;
   try {
-    return (
-      JSON.parse(fs.readFileSync(file, "utf8")).enterprise?.routeAttestation ===
-      true
-    );
+    const enterprise = JSON.parse(fs.readFileSync(file, "utf8")).enterprise;
+    if (enterprise === undefined) return false;
+    // An invalid shape is rejected by the config loader; here it must not read as "off".
+    if (
+      !isObject(enterprise) ||
+      Object.keys(enterprise).some((k) => k !== "routeAttestation") ||
+      (enterprise.routeAttestation !== undefined &&
+        typeof enterprise.routeAttestation !== "boolean")
+    )
+      return true;
+    return enterprise.routeAttestation === true;
   } catch {
     // An unreadable config is rejected by the registry loader; never treat it as "off" silently.
     return true;
   }
 }
 
-/** Parse and validate the record; returns `{ ok, record, digest }` or `{ ok: false }`. Never throws. */
+/** Parse and validate the record; returns `{ ok, record }` or `{ ok: false }`. Never throws. */
 export function loadAttestationRecord(root = process.cwd()) {
   try {
     const text = fs.readFileSync(
@@ -88,11 +97,7 @@ export function loadAttestationRecord(root = process.cwd()) {
     );
     const record = JSON.parse(text);
     if (!validateRecord(record)) return { ok: false };
-    return {
-      ok: true,
-      record,
-      digest: createHash("sha256").update(text).digest("hex"),
-    };
+    return { ok: true, record };
   } catch {
     return { ok: false };
   }
@@ -129,8 +134,14 @@ function validateRecord(record) {
     )
       return false;
     if (
-      ![r.runtime, r.provider, r.requestedModel, r.canonicalModel].every(
+      ![r.runtime, r.provider].every(
         (v) => typeof v === "string" && TOKEN.test(v),
+      )
+    )
+      return false;
+    if (
+      ![r.requestedModel, r.canonicalModel].every(
+        (v) => typeof v === "string" && v.length <= 128 && MODEL_LABEL.test(v),
       )
     )
       return false;
@@ -219,11 +230,4 @@ export function runtimeHasApprovedRoute(runtime, options = {}) {
         { ...options, root },
       ).allow,
   );
-}
-
-/** Digest of mode + record for cache validity; null when the mode is off. */
-export function policyDigest(root = process.cwd()) {
-  if (!isEnterpriseMode(root)) return null;
-  const loaded = loadAttestationRecord(root);
-  return loaded.ok ? loaded.digest : "invalid";
 }

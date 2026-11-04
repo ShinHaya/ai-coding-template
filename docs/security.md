@@ -83,7 +83,63 @@ The check runs before any catalog listing or model probe, again after the probe
 (canonical model), on every cached or supplied capability, and immediately before
 launch (dispatch passes the role as purpose; a dispatch without a role or
 `purpose` is denied). The existing `agents.models` allow/deny rules still apply.
-Denials expose only closed reason codes.
+Denials expose only closed reason codes. Benchmark runs
+(`issue-route-benchmark.mjs`) are denied before any process starts unless the
+route is attested for `triage`. The purpose is otherwise enforced only at
+`dispatchWorker` launch; route selection and TypeSafe triage do not check it.
+`requestedModel`/`canonicalModel` may be CLI display names with single spaces
+(for example `GPT Test`). A syntactically valid but malformed `enterprise` config
+shape is treated as mode on (fail closed).
+
+Bootstrap: create the record by hand before enabling the mode. Minimal shape:
+
+```json
+{
+  "version": 1,
+  "acceptable": {
+    "trainingOptOut": ["opted-out"],
+    "retention": ["zero"],
+    "externalTransmission": ["provider-only"],
+    "telemetry": ["disabled"]
+  },
+  "routes": [
+    {
+      "runtime": "claude",
+      "provider": "example-provider",
+      "requestedModel": "sonnet",
+      "canonicalModel": "example-model-1",
+      "purposes": ["implementer"],
+      "verifiedOn": "2026-01-01",
+      "expiresOn": "2026-04-01",
+      "conditions": {
+        "trainingOptOut": {
+          "value": "opted-out",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "retention": {
+          "value": "zero",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "externalTransmission": {
+          "value": "provider-only",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "telemetry": {
+          "value": "disabled",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        }
+      }
+    }
+  ]
+}
+```
+
+Use the model name the CLI reports as `canonicalModel`; the catalog listing is
+gated, so read it from the CLI directly the first time.
 
 Limits: the record is local self-attestation; it does not verify an account,
 contract or provider setting. A running worker is not stopped when approval is
