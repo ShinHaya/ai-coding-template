@@ -53,3 +53,13 @@ step. -->
 
 <!-- Behavior that is known-imperfect in this build, so a tester does not file
 it repeatedly. -->
+
+### Runtime environment configuration
+
+- With fake data, allow a required variable for one runtime and confirm its CLI
+  can start; remove it and confirm `runtime-env-required-missing` before spawn.
+- For a real CLI using HOME login or a corporate proxy/CA, configure only the
+  necessary variable names locally and check catalog, probe, worker and usage.
+  Record outcomes only, never values or raw CLI output.
+- Restart any externally managed server with the chosen environment policy;
+  do not infer isolation of its tools from this wrapper's checks.

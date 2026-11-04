@@ -1,3 +1,4 @@
+import { environmentReason } from "./environment.mjs";
 import {
   DEFAULT_WORKER_TIMEOUT_MS,
   REASON_CODES,
@@ -13,6 +14,7 @@ import {
 } from "./shared.mjs";
 import { fetchRuntimeCatalog } from "./catalog.mjs";
 import {
+  runtimeEnvironment,
   isModelAllowed,
   isModelDenied,
   isRetiredCommand,
@@ -31,7 +33,21 @@ export function createAdapter(definition) {
      */
     async discover(ctx = {}) {
       const run = ctx.runProcess ?? runProcess;
-      const env = ctx.env ?? process.env;
+      let env;
+      try {
+        env = runtimeEnvironment(definition, ctx);
+      } catch (error) {
+        return {
+          records: [],
+          diagnostics: [
+            diagnostic({
+              agent,
+              status: "failed",
+              reason: environmentReason(error) ?? REASON_CODES.PROBE_FAILED,
+            }),
+          ],
+        };
+      }
       const records = [],
         diagnostics = [];
       const fail = (reason) => ({
@@ -152,8 +168,18 @@ export function createAdapter(definition) {
       return { records, diagnostics, cliPath };
     },
     async launch(ctx = {}, job) {
+      ctx = { ...ctx, cwd: job.cwd ?? ctx.cwd };
       if (definition.retired) throw new Error("runtime-retired");
-      const env = ctx.env ?? process.env;
+      const env = runtimeEnvironment(
+        definition,
+        ctx,
+        job.leaseSession
+          ? {
+              session: job.leaseSession,
+              ownerPid: ctx.leaseOwnerPid ?? process.pid,
+            }
+          : undefined,
+      );
       const tokens = splitSelector(job.selector);
       if (isRetiredCommand(tokens[0], job.cwd ?? ctx.cwd))
         throw new Error("runtime-retired");
