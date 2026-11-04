@@ -57,6 +57,29 @@ This template has no cloud project. The procedure is
 and the `Deploy failure diagnosis` section of
 [`development.md`](development.md).
 
+### Worker execution permissions
+
+Orchestrated workers run AI agent CLIs on the operator's own machine. The
+template distinguishes three levels and does not present one as another:
+
+- **Prompt-level rules** (for example "do not modify anything" in a reviewer
+  prompt) are instructions, not enforcement.
+- **CLI-enforced profiles** (`enforcement: cli`) make the agent CLI refuse
+  file-edit tools and commands outside an allow list. They do not isolate the
+  machine: an allowed command runs with the user's own file and credential
+  access, and allowed commands such as `gh ... comment`, `git push` or
+  `issue-worktree.sh` write or post by themselves.
+- **OS-level isolation** is not implemented. An Issue worktree is not a sandbox.
+  Only Codex `read-only` uses the CLI's OS sandbox.
+
+Bypass profiles are never a default and need an explicit repository-config
+opt-in per runtime. `inherited` profiles leave the decision to the user's CLI
+settings, and `requireEnforcement` can exclude them. A permission denial or an
+approval wait ends the worker (failure or timeout); the template never retries
+with looser permissions. Workers can still read project settings such as
+`.claude/settings.json`, and a `workspace-write` implementer can edit them;
+review such changes in the PR. Details: `development.md`, "Worker permissions".
+
 ## 7. Input And DOM Safety
 
 <!-- How externally-supplied data is validated and escaped at each boundary. -->

@@ -22,6 +22,7 @@ import {
   getRepositoryCommit,
   isRetiredRuntimeRoute,
   isDisallowedModelRoute,
+  selectorHasPermissionArgs,
   readCliVersion,
   runProcess,
   writeJsonAtomic,
@@ -287,7 +288,8 @@ export async function loadOrRefreshCapabilities(options = {}) {
     ((cached.capabilities ?? []).some(
       (record) =>
         isRetiredRuntimeRoute(record, options.cwd) ||
-        isDisallowedModelRoute(record, options.cwd),
+        isDisallowedModelRoute(record, options.cwd) ||
+        selectorHasPermissionArgs(record, options.cwd),
     ) ||
       Object.values(cached.cli ?? {}).some((entry) =>
         isRetiredCommand(entry?.path, options.cwd),
@@ -425,7 +427,8 @@ export async function refreshWorkerRoutes(options = {}) {
  * Dispatch preflight: re-read the selected agent's catalog and probe only the
  * exact model. Never execute the supplied selector; compare it to fresh CLI
  * discovery. A changed selector or a failed model requires route reselection.
- * @param {{ agent?: string, model?: string, requestedModel?: string, selector?: string }} route
+ * @param {{ agent?: string, model?: string, requestedModel?: string, selector?: string,
+ *   permissionFingerprint?: string }} route
  * @param {CapabilityOptions} [options]
  */
 export async function verifyWorkerRoute(route, options = {}) {
@@ -458,7 +461,8 @@ export async function verifyWorkerRoute(route, options = {}) {
     (candidate) =>
       candidate.agent === agent &&
       candidate.model === route.model &&
-      candidate.selector === route.selector,
+      candidate.selector === route.selector &&
+      candidate.permissionFingerprint === route.permissionFingerprint,
   );
   if (verified) return { ok: true, route: verified, probedAt: result.probedAt };
   const failure = result.diagnostics.find(

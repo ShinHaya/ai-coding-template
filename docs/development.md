@@ -400,6 +400,84 @@ use collected data for model improvement, or that retain data (such as
 `beam-free`, 30 days), are excluded. Free periods and privacy terms change
 upstream; re-check the source and update the list by hand.
 
+### Worker permissions
+
+Permission arguments never live in a selector. Each non-retired runtime declares
+`permissions` in its definition: the `flags` the permission layer owns, how
+allow rules are passed (`allowArgs`, with `{rules}` joined by commas or
+`{rule}` repeated), and named profiles. Each profile states its `args`, default
+`allow` rules, `enforcement` and whether its commands can reach the `network`.
+
+| Profile           | Default role                | What it permits                                                                                                       |
+| ----------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `workspace-write` | implementer, single worker  | File edits in the working directory and the allowed commands (git commit/push, `gh pr create`, quality gates)         |
+| `worktree-setup`  | planner                     | No file-edit tools. Allowed commands: read-only git/gh, `issue-worktree.sh create/handoff/status`, `gh issue comment` |
+| `read-only`       | reviewer                    | No file-edit tools and no worktree helper. Allowed commands: read-only git/gh, `gh issue comment`, `gh pr comment`    |
+| `bypass`          | none (explicit opt-in only) | No permission checks                                                                                                  |
+
+`enforcement` is `cli` when the CLI itself applies the restriction, `inherited`
+when the template passes nothing (or a profile the user's CLI config can
+override) and the user's CLI settings decide, and `none` for `bypass`.
+
+| Runtime  | `workspace-write`                                                               | `worktree-setup` / `read-only`                                                                                        | `bypass`                              |
+| -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Claude   | `--permission-mode acceptEdits --permission-prompts none` + allow rules (`cli`) | `--permission-mode dontAsk --permission-prompts none --disallowedTools=Edit,Write,NotebookEdit` + allow rules (`cli`) | `--permission-mode bypassPermissions` |
+| Grok     | `--permission-mode acceptEdits` + `--allow` rules (`cli`)                       | `--permission-mode dontAsk` + `--allow` rules (`cli`)                                                                 | `--permission-mode bypassPermissions` |
+| Codex    | nothing (`inherited`)                                                           | `worktree-setup`: nothing (`inherited`); `read-only`: `-s read-only` (`cli`, no network)                              | not defined                           |
+| OpenCode | nothing (`inherited`)                                                           | `--agent plan` (`inherited`: the user's OpenCode config defines that agent)                                           | `--auto`                              |
+| Gemini   | nothing (`inherited`, not verified: CLI not installed)                          | nothing (`inherited`)                                                                                                 | not defined                           |
+
+Codex `workspace-write` stays `inherited`: commits in an Issue worktree write the
+primary clone's git common directory outside the worktree, and the
+`workspace-write` sandbox blocks the network that `git push` and `gh` need.
+Opening both widens the writable area and needs its own design. Codex
+`read-only` blocks the network, so a Codex route cannot post a review or a plan;
+it is never assigned the reviewer role and dispatch refuses it with
+`route-permission-insufficient`. Permissions are never loosened to make a role
+run.
+
+Repository config `agents.permissions` selects and tunes profiles:
+
+```jsonc
+"permissions": {
+  "roles": { "implementer": "workspace-write", "planner": "worktree-setup", "reviewer": "read-only" },
+  "allowBypass": [],           // runtime IDs allowed to run a role mapped to "bypass"
+  "requireEnforcement": [],    // profiles that may only run where enforcement is "cli"
+  "runtimes": { "claude": { "workspace-write": { "allow": ["Bash(npm test:*)"] } } }
+}
+```
+
+- `roles` defaults to the table above. Mapping a role to `bypass` requires every
+  enabled runtime in `allowBypass` (`runtime-permission-bypass-not-allowed:<id>`),
+  and each listed runtime must define `bypass`. There is no environment variable
+  or CLI flag that enables bypass.
+- `requireEnforcement` excludes runtimes whose profile is not `cli`-enforced from
+  the roles that use it (`route-permission-unenforced`).
+- `runtimes.<id>.<profile>.allow` replaces that profile's default allow rules.
+  Use it to match the command scope a host organization permits; the template does
+  not guess it. Allowing `node` or `npm` scripts is close to allowing arbitrary
+  code, and an allowed command such as `gh ... comment` or `issue-worktree.sh`
+  writes or posts by itself.
+
+The probe and route benchmark run with the implementer's argv, exactly as
+dispatch launches it. Capability records store only a `permissionFingerprint`
+(a hash of every role's resolved argv) and `permissionRoles`; dispatch rebuilds
+the argv from the current registry and refuses a route whose selector carries a
+permission flag or bypass token (`route-permission-args-forbidden`), or whose
+fingerprint differs (`route-permission-mismatch`, re-probe). A probe whose tool
+calls were denied fails with `permission-denied`; a CLI that waits for approval
+hits the existing timeout. A runtime that the policy leaves no role is not
+probed (`permission-unavailable`). The permission policy is part of the registry
+fingerprint, and `PROBE_SCHEMA_VERSION` 6 discards caches whose selectors still
+carry `bypassPermissions` or `--auto`.
+
+Migration: worker runs no longer skip permission checks by default. Claude and
+Grok workers now refuse commands outside their allow list, and OpenCode without
+`--auto` may fail its probe and drop out. Either extend
+`agents.permissions.runtimes.<id>.<profile>.allow` with the commands you need,
+or opt in to bypass deliberately with `allowBypass` and `roles`. This
+repository's own config does not opt in.
+
 For a new CLI, add one JSON and enable its ID. Ordinary JSON arrays or provider/model
 line catalogs use the existing generic parsers. CLI-specific state parsers are a
 closed library, never dynamic imports from a definition. Auth/catalog success is
