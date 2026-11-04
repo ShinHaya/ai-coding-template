@@ -113,3 +113,9 @@ missing reset timestamps, locked windows, and weekly-only responses. A runtime
 with a declared unavailable five-hour reader returns unknown without starting a
 CLI. Live checks retain only closed status/type/duration summaries; never add
 raw account/auth responses or research-agent tool logs to fixtures or commits.
+
+Runtime environment tests use fake values and real Node children to check OS
+basics, runtime opt-ins, unrelated-secret exclusion, exec/stdio server launches,
+worker leases and pre-spawn validation. Registry tests check canonical runtime
+isolation and fingerprint changes. Windows name folding/collisions are tested
+with injected platform rules; native Windows execution needs Windows CI.
