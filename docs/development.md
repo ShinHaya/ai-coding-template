@@ -339,6 +339,13 @@ configuration reader does not replace or rewrite those files. Configure their
 actual checks in the adopting repository. Role instructions and review skills
 refer to `AGENTS.md`; their models and discovery formats are generated from runtime definitions.
 
+### Enterprise route attestation
+
+`.ai-template/config.json` accepts `"enterprise": { "routeAttestation": true }`
+(default off). The operator-maintained record and its preflight are described in
+[`docs/security.md`](security.md) (Enterprise route attestation). Pass `purpose`
+(or a `role`) to `dispatchWorker`; enterprise mode denies a launch without one.
+
 ## Runtime registration and generated files
 
 `agents/runtimes/*.json` is the runtime registry. Each filename must match its

@@ -57,6 +57,45 @@ This template has no cloud project. The procedure is
 and the `Deploy failure diagnosis` section of
 [`development.md`](development.md).
 
+### Enterprise route attestation (opt-in)
+
+Set `enterprise.routeAttestation: true` in `.ai-template/config.json` to admit
+only routes attested in a local record, `state/enterprise-route-attestation.json`
+(ignored by Git; keep it owner-readable only, e.g. `chmod 600`). Default is off.
+The ship-with defaults approve nothing; approved services, purposes and
+acceptable values are enterprise decisions.
+
+The record (`version: 1`) lists, per exact `runtime` + `requestedModel`: the
+upstream `provider`, expected `canonicalModel`, approved `purposes`
+(`planner`, `implementer`, `reviewer`, `parent`, `triage`), `verifiedOn` and
+`expiresOn` dates, and four independent conditions (`trainingOptOut`,
+`retention`, `externalTransmission`, `telemetry`). Each condition has a `value`,
+a `confirmation` (`self-declared`, `machine-verified`, `unconfirmed`) and a
+non-sensitive `evidence` reference. A top-level `acceptable` map names the values
+the operator accepts for each condition. Opt-out never implies zero retention.
+Never put credentials, account IDs, prompts, responses or logs in the record.
+
+Behavior: a missing, malformed, ambiguous, expired, future-dated or changed
+record, an unaccepted or `unconfirmed` condition, a missing purpose, or a
+canonical-model mismatch denies the route. `machine-verified` is also denied
+because no supported check supplies machine evidence; use `self-declared`.
+The check runs before any catalog listing or model probe, again after the probe
+(canonical model), on every cached or supplied capability, and immediately before
+launch (dispatch passes the role as purpose; a dispatch without a role or
+`purpose` is denied). The existing `agents.models` allow/deny rules still apply.
+Denials expose only closed reason codes.
+
+Limits: the record is local self-attestation; it does not verify an account,
+contract or provider setting. A running worker is not stopped when approval is
+revoked: stop the run yourself. This guard does not inspect other channels the
+operator must review manually: optional TypeSafe external triage (opt-in), CLI
+MCP servers/plugins and automatic sharing, and GitHub Issue/comment/PR postings.
+Do not infer a setting from a missing UI. The reported Codex "Include
+environments" setting is unknown pending vendor confirmation: treat it as neither
+enabled nor disabled. Before use, verify each condition against current official
+sources and account settings, record the source type and an expiry, and re-verify
+on change. No network lookup is added.
+
 ## 7. Input And DOM Safety
 
 <!-- How externally-supplied data is validated and escaped at each boundary. -->
