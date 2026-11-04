@@ -466,7 +466,9 @@ the argv from the current registry and refuses a route whose selector carries a
 permission flag or bypass token (`route-permission-args-forbidden`), or whose
 fingerprint differs (`route-permission-mismatch`, re-probe). A probe whose tool
 calls were denied fails with `permission-denied`; a CLI that waits for approval
-hits the existing timeout. A runtime that the policy leaves no role is not
+hits the existing timeout. Dispatched worker runs are not checked for denials (a
+CLI can exit 0 after refusing a tool call); quality gates, PR checks and the
+milestone gate catch the missing work. A runtime that the policy leaves no role is not
 probed (`permission-unavailable`). The permission policy is part of the registry
 fingerprint, and `PROBE_SCHEMA_VERSION` 6 discards caches whose selectors still
 carry `bypassPermissions` or `--auto`.
