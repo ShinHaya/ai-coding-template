@@ -58,7 +58,7 @@ bash scripts/setup-hooks.sh
 .
 ├── .agents/       # Codex / Gemini skill links and subagent definitions
 ├── .claude/       # Claude Code skill links, subagents, and guard hook
-├── .githooks/     # pre-commit quality-gate hook and its config
+├── .githooks/     # commit-msg quality-gate hook and its config
 ├── .github/       # Issue templates, workflows, Dependabot config
 ├── config/        # example orchestrator configuration
 ├── docs/          # documentation (see docs/README.md)
@@ -73,7 +73,7 @@ bash scripts/setup-hooks.sh
 ### 5.1 Formatting
 
 ```bash
-# Check without changing files (also used by pre-commit and CI)
+# Check without changing files (also used by the commit-msg hook and CI)
 npm run format
 # Apply formatting before staging changes
 npm run format:write
@@ -334,7 +334,7 @@ repository/document fields, and escaping document paths fail before Git fetch
 or branch creation. Agent/runtime and local-skill settings are validated by the runtime registry
 before discovery, generation and worktree ownership operations.
 
-`.githooks/pre-commit`, product CI and package scripts remain repo-owned. The
+`.githooks/commit-msg`, product CI and package scripts remain repo-owned. The
 configuration reader does not replace or rewrite those files. Configure their
 actual checks in the adopting repository. Role instructions and review skills
 refer to `AGENTS.md`; their models and discovery formats are generated from runtime definitions.
@@ -527,7 +527,7 @@ declared per path:
   `skills/`. `.ai-template/`, `.git` and `.github/workflows/` cannot be managed.
 - **generated**: outputs of `generate`, recorded in `.ai-template/generated.json`.
 - **repo-owned**: everything else, including `.ai-template/config.json`,
-  `AGENTS.md`, `docs/`, `package.json`, `.githooks/pre-commit` and CI.
+  `AGENTS.md`, `docs/`, `package.json`, `.githooks/commit-msg` and CI.
 
 ```bash
 # In a consumer checkout: copy managed files from a clean template checkout

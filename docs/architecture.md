@@ -59,7 +59,7 @@ separate ADR files. -->
 
 ### Formatting gate (Issue #55)
 
-The pre-commit format gate must call a real, read-only command. Prettier was
+The commit hook's format gate must call a real, read-only command. Prettier was
 chosen over Biome to preserve consumers' ESLint configurations and keep
 formatting separate from correctness checks. It runs separately rather than via
 `eslint-plugin-prettier`. Current ESLint rules contain no formatting rules, so

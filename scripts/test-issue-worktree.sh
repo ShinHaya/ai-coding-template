@@ -240,8 +240,8 @@ STATUS=$("$HELPER" status 396 --json --repo "$REPO")
 assert_eq "$(printf '%s' "$STATUS" | jq -r .handoff_epoch)" "2"
 assert_eq "$(printf '%s' "$STATUS" | jq -r .owner.agent)" "$SECOND_AGENT"
 
-# The superseded session can no longer acquire or heartbeat, so its pre-commit
-# lease check stops it before two sessions write to the same worktree.
+# The superseded session can no longer acquire or heartbeat, so its lease
+# check before each commit stops it before two sessions write to the same worktree.
 OUT=$(assert_fails "$HELPER" acquire 396 --agent "$FIRST_AGENT" --session lease-worker --repo "$REPO")
 assert_contains "$OUT" "another session"
 OUT=$(assert_fails "$HELPER" acquire 396 --session lease-worker --heartbeat --repo "$REPO")

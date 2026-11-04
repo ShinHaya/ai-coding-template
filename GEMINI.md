@@ -210,7 +210,7 @@ per Issue, with at most one implementer fix pass that is not re-reviewed. The
 verdict is a GitHub comment headed `role=reviewer pass=<N> verdict=<…>`. See
 [`docs/github-operations.md`](docs/github-operations.md) §8.
 
-- Install the pre-commit quality-gate hook once after cloning:
+- Install the commit quality-gate hook (`.githooks/commit-msg`) once after cloning:
   `bash scripts/setup-hooks.sh`. Do not assume it has run unless verified in
   the current environment.
 

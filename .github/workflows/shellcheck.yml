@@ -14,4 +14,4 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Run shellcheck
-        run: shellcheck .githooks/pre-commit scripts/*.sh .claude/hooks/*.sh
+        run: shellcheck .githooks/commit-msg scripts/*.sh .claude/hooks/*.sh
