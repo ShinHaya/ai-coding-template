@@ -4,6 +4,7 @@ import {
   loadRuntimeRegistry,
   resolvePermission,
 } from "./ai-template/registry.mjs";
+import { evaluateRoute } from "./enterprise-route-policy.mjs";
 /**
  * Route benchmark for RouteEvidence.
  *
@@ -295,6 +296,20 @@ export async function runBenchmarkTask(
     cwd = process.cwd(),
   } = {},
 ) {
+  // Enterprise mode: a benchmark run is outbound model work, so the route must be attested for
+  // the triage purpose before any sandbox or process exists. Mode off is a no-op.
+  if (
+    !evaluateRoute(
+      {
+        runtime: route.agent,
+        requestedModel: routeModel(route),
+        model: route.model,
+        purpose: "triage",
+      },
+      { root: cwd },
+    ).allow
+  )
+    throw new Error("route-benchmark-enterprise-denied");
   const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), "route-bench-"));
   try {
     for (const [name, content] of Object.entries(task.files))

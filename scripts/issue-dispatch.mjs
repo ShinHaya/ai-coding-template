@@ -166,6 +166,7 @@ export function startLeaseHeartbeat({
  * @param {number} input.issueNumber
  * @param {string} input.releasePolicy
  * @param {string} input.nextMilestone
+ * @param {string} [input.purpose] - enterprise attestation purpose; defaults to the role
  * @param {string} [input.role] - planner | implementer | reviewer; omitted in single-worker mode
  * @param {string} [input.skill] - issue-implementation | handoff-issue
  * @param {string} [input.executionMode]
@@ -242,6 +243,10 @@ export async function dispatchWorker(input, ctx = {}) {
     selector: route.selector,
     timeoutMs: route.timeoutMs,
     cwd: input.cwd,
+    // Enterprise route attestation: the purpose is the dispatch role; absent means denied there.
+    ...((input.purpose ?? input.role)
+      ? { purpose: input.purpose ?? input.role }
+      : {}),
     ...(leaseSession === undefined ? {} : { leaseSession }),
   };
 

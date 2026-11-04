@@ -5,6 +5,7 @@ import {
   isPermissionArgument,
   isRetiredCommand,
 } from "../ai-template/registry.mjs";
+import { evaluateRoute } from "../enterprise-route-policy.mjs";
 import { loadRepositoryConfig } from "../repository-config.mjs";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -32,6 +33,8 @@ export const REASON_CODES = Object.freeze({
   MODEL_DENIED: "model-denied",
   // An alias-resolving runtime did not report exactly one canonical model during the probe.
   MODEL_UNRESOLVED: "model-unresolved",
+  // Enterprise route attestation (opt-in) did not admit this runtime/model/purpose.
+  ENTERPRISE_DENIED: "enterprise-route-denied",
   // The CLI reported denied tool calls and the probe task did not complete.
   PERMISSION_DENIED: "permission-denied",
   // The permission policy leaves this runtime no role it can run; it is never probed.
@@ -411,12 +414,18 @@ export function isRetiredRuntimeRoute(route, root = process.cwd()) {
 
 /** A route excluded by the runtime's model allowlist or deny patterns (model or requested value). */
 export function isDisallowedModelRoute(route, root = process.cwd()) {
-  return !isModelAllowed(
-    route?.agent,
-    route?.model,
-    root,
-    route?.requestedModel,
-  );
+  if (!isModelAllowed(route?.agent, route?.model, root, route?.requestedModel))
+    return true;
+  // Enterprise mode (opt-in): the live attestation must also admit the route. Purpose is checked at launch.
+  const runtime = findRuntime(route?.agent, root);
+  return !evaluateRoute(
+    {
+      runtime: runtime?.id,
+      requestedModel: route?.requestedModel ?? route?.model,
+      model: route?.model,
+    },
+    { root },
+  ).allow;
 }
 
 /**

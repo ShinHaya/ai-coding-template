@@ -244,6 +244,13 @@
       "required": ["enabled"],
       "additionalProperties": false
     },
+    "enterprise": {
+      "type": "object",
+      "properties": {
+        "routeAttestation": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "localSkills": {
       "type": "array",
       "items": {

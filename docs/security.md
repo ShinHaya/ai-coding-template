@@ -66,6 +66,101 @@ This template has no cloud project. The procedure is
 and the `Deploy failure diagnosis` section of
 [`development.md`](development.md).
 
+### Enterprise route attestation (opt-in)
+
+Set `enterprise.routeAttestation: true` in `.ai-template/config.json` to admit
+only routes attested in a local record, `state/enterprise-route-attestation.json`
+(ignored by Git; keep it owner-readable only, e.g. `chmod 600`). Default is off.
+The ship-with defaults approve nothing; approved services, purposes and
+acceptable values are enterprise decisions.
+
+The record (`version: 1`) lists, per exact `runtime` + `requestedModel`: the
+upstream `provider`, expected `canonicalModel`, approved `purposes`
+(`planner`, `implementer`, `reviewer`, `parent`, `triage`), `verifiedOn` and
+`expiresOn` dates, and four independent conditions (`trainingOptOut`,
+`retention`, `externalTransmission`, `telemetry`). Each condition has a `value`,
+a `confirmation` (`self-declared`, `machine-verified`, `unconfirmed`) and a
+non-sensitive `evidence` reference. A top-level `acceptable` map names the values
+the operator accepts for each condition. Opt-out never implies zero retention.
+Never put credentials, account IDs, prompts, responses or logs in the record.
+
+Behavior: a missing, malformed, ambiguous, expired, future-dated or changed
+record, an unaccepted or `unconfirmed` condition, a missing purpose, or a
+canonical-model mismatch denies the route. `machine-verified` is also denied
+because no supported check supplies machine evidence; use `self-declared`.
+The check runs before any catalog listing or model probe, again after the probe
+(canonical model), on every cached or supplied capability, and immediately before
+launch (dispatch passes the role as purpose; a dispatch without a role or
+`purpose` is denied). The existing `agents.models` allow/deny rules still apply.
+Denials expose only closed reason codes. Benchmark runs
+(`issue-route-benchmark.mjs`) are denied before any process starts unless the
+route is attested for `triage`. The purpose is otherwise enforced only at
+`dispatchWorker` launch; route selection and TypeSafe triage do not check it.
+`requestedModel`/`canonicalModel` may be CLI display names with single spaces
+(for example `GPT Test`). A syntactically valid but malformed `enterprise` config
+shape is treated as mode on (fail closed).
+
+Bootstrap: create the record by hand before enabling the mode. Minimal shape:
+
+```json
+{
+  "version": 1,
+  "acceptable": {
+    "trainingOptOut": ["opted-out"],
+    "retention": ["zero"],
+    "externalTransmission": ["provider-only"],
+    "telemetry": ["disabled"]
+  },
+  "routes": [
+    {
+      "runtime": "claude",
+      "provider": "example-provider",
+      "requestedModel": "sonnet",
+      "canonicalModel": "example-model-1",
+      "purposes": ["implementer"],
+      "verifiedOn": "2026-01-01",
+      "expiresOn": "2026-04-01",
+      "conditions": {
+        "trainingOptOut": {
+          "value": "opted-out",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "retention": {
+          "value": "zero",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "externalTransmission": {
+          "value": "provider-only",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "telemetry": {
+          "value": "disabled",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        }
+      }
+    }
+  ]
+}
+```
+
+Use the model name the CLI reports as `canonicalModel`; the catalog listing is
+gated, so read it from the CLI directly the first time.
+
+Limits: the record is local self-attestation; it does not verify an account,
+contract or provider setting. A running worker is not stopped when approval is
+revoked: stop the run yourself. This guard does not inspect other channels the
+operator must review manually: optional TypeSafe external triage (opt-in), CLI
+MCP servers/plugins and automatic sharing, and GitHub Issue/comment/PR postings.
+Do not infer a setting from a missing UI. The reported Codex "Include
+environments" setting is unknown pending vendor confirmation: treat it as neither
+enabled nor disabled. Before use, verify each condition against current official
+sources and account settings, record the source type and an expiry, and re-verify
+on change. No network lookup is added.
+
 ### Worker execution permissions
 
 Orchestrated workers run AI agent CLIs on the operator's own machine. The

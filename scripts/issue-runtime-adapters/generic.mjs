@@ -14,6 +14,7 @@ import {
   splitSelector,
 } from "./shared.mjs";
 import { fetchRuntimeCatalog } from "./catalog.mjs";
+import { evaluateRoute } from "../enterprise-route-policy.mjs";
 import {
   runtimeEnvironment,
   isModelAllowed,
@@ -110,6 +111,26 @@ export function createAdapter(definition) {
           );
           continue;
         }
+        // Enterprise mode: only an exactly attested requested model is ever probed.
+        if (
+          !evaluateRoute(
+            {
+              runtime: definition.id,
+              requestedModel: resolveModel ? model : label,
+            },
+            { root: ctx.cwd, now: ctx.now },
+          ).allow
+        ) {
+          diagnostics.push(
+            diagnostic({
+              agent,
+              status: "failed",
+              reason: REASON_CODES.ENTERPRISE_DENIED,
+              model,
+            }),
+          );
+          continue;
+        }
         const args = [
           quoteSelectorArg(cliPath),
           ...definition.selectorArgs.map((arg) =>
@@ -166,6 +187,26 @@ export function createAdapter(definition) {
           );
           continue;
         }
+        if (
+          !evaluateRoute(
+            {
+              runtime: definition.id,
+              requestedModel: entry.requestedModel,
+              model: entry.model,
+            },
+            { root: ctx.cwd, now: ctx.now },
+          ).allow
+        ) {
+          diagnostics.push(
+            diagnostic({
+              agent,
+              status: "failed",
+              reason: REASON_CODES.ENTERPRISE_DENIED,
+              model,
+            }),
+          );
+          continue;
+        }
         if (records.some((record) => record.model === entry.model)) continue;
         for (const role of ["worker", "parent"])
           records.push(
@@ -189,6 +230,19 @@ export function createAdapter(definition) {
     async launch(ctx = {}, job) {
       ctx = { ...ctx, cwd: job.cwd ?? ctx.cwd };
       if (definition.retired) throw new Error("runtime-retired");
+      // Re-read the policy immediately before launch; a purpose is mandatory in enterprise mode.
+      if (
+        !evaluateRoute(
+          {
+            runtime: definition.id,
+            requestedModel: job.requestedModel ?? job.model,
+            model: job.model,
+            purpose: job.purpose ?? "<missing>",
+          },
+          { root: job.cwd ?? ctx.cwd, now: ctx.now },
+        ).allow
+      )
+        throw new Error("enterprise-route-denied");
       const root = ctx.cwd;
       const env = runtimeEnvironment(
         definition,
