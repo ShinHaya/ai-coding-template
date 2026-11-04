@@ -286,6 +286,155 @@ at it from `AGENTS.md`.
   (`.git/issue-worktrees/`), not in the worktree.
 - `.worktrees/` holds per-Issue agent worktrees and is git-ignored.
 
+## 12. Borrowed-PC And Undecided-Repository Trial
+
+Use this when the machine or the target GitHub repository is not known until
+the day (for example a company trial). Keep company-specific facts and the
+filled-in checklist outside Git (a scratch note or `state/`, which is
+git-ignored). Run only the **minimum path** to start or stop; the rest is
+optional detail.
+
+### 12.1 Minimum start path
+
+1. **Pick the posting target and write it down**: `owner/name`, visibility
+   (public/private), the identity `gh auth status` reports, and whether
+   Issues, pushes, PRs, merges and deploys are each allowed. Unknown means
+   not allowed.
+2. **Stop here if posting is not allowed.** Work locally only: do not file
+   Issues, push, or open PRs. The Issue-and-worktree workflow in
+   [`github-operations.md`](github-operations.md) needs an Issue; if the
+   environment cannot provide one, stop and decide a separate policy with the
+   Product Owner instead of bypassing it. Never copy a company's problem text
+   into a personal or public repository.
+3. **Check the target before any run** (read-only):
+
+   ```bash
+   gh auth status
+   gh repo view --json nameWithOwner,visibility,viewerPermission
+   echo "${GITHUB_REPOSITORY:-<unset>}"
+   ```
+
+   `GITHUB_REPOSITORY` decides which repository the orchestrator and dispatcher
+   read Issues from (§10). `gh issue create` and `gh pr create` write to the
+   checkout's remote instead. Both must name the same repository. If
+   `GITHUB_REPOSITORY` is set and differs from `nameWithOwner`, run
+   `unset GITHUB_REPOSITORY` or correct it before continuing, so Issue selection
+   and dispatch do not point at a different repository.
+
+4. **Inspect what already exists** before applying the template: existing
+   `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`, `.githooks/` and `core.hooksPath`,
+   `.github/workflows/`, and branch protection. Do not overwrite them and do
+   not run `ai-template.mjs sync --from <template> --adopt` on a company repository
+   without explicit approval; `sync` is a reviewed change, not a setup step. Do not
+   register the repository with any sync target without approval.
+5. **Install** per §2.2 (`bash scripts/setup-hooks.sh`, `npm ci`). If
+   `setup-hooks.sh` stops because `core.hooksPath` is already set, leave it and
+   report; do not unset a company hook manager.
+
+### 12.2 Two repository cases
+
+| Case                                                    | Do                                                                                                                                         | Do not                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Company's existing repository                           | Follow its rules first; add the template only in a branch/PR they approve; use the company-approved identity.                              | Overwrite its agent files, hooks or CI; push or open PRs unapproved    |
+| Your own private repository, with company authorization | Real trial work only with explicit company approval of the repository, its visibility and data handling. Record that approval outside Git. | Start real trial work, or copy company material, without that approval |
+| Your own working repository (fake)                      | Use fake data only; rehearse the workflow; keep it private if any company-derived wording could appear in Issues.                          | Mirror company Issue content into it; copy company material            |
+
+If the company has not authorized your private repository for this data, use
+the fake-data rows only and do not copy company material into it. The
+rehearsal in §12.3 stays fake-data-only in every case.
+
+### 12.3 Rehearsal with fake data
+
+Rehearse in a throwaway repository you own, with invented Issue text.
+Distinguish the two kinds of check:
+
+- **Read-only preparation** (no model is executed, no prompt is sent, no
+  repository text leaves the machine): `gh auth status`,
+  `gh repo view --json nameWithOwner,visibility,viewerPermission`,
+  `node scripts/repository-config.mjs`, `node scripts/issue-model-catalog.mjs show`,
+  and the quality gates in §8.
+- **Paid / outbound commands** (they execute a real model or send prompts to
+  the provider, and cost quota): `node scripts/issue-model-catalog.mjs refresh`
+  (lists models from each CLI and writes `state/model-catalog.json`),
+  `node scripts/issue-capabilities.mjs` (probes each candidate route),
+  `node scripts/issue-orchestrator.mjs --dry-run` (it runs capability
+  discovery when no capabilities file is given, so it can probe), and any real
+  `issue-dispatch.mjs` or orchestrator run. Run them only with fake data, only
+  after the company's AI-use rules allow the provider, and record that you
+  did.
+
+The orchestrator dry run uses the same parent-route flags as §10, and it must
+be given a current capabilities file so that it does not probe:
+
+```bash
+node scripts/issue-orchestrator.mjs --issues <fake-issue-numbers> --dry-run \
+  --capabilities-file state/issue-capabilities.json \
+  --max-parallel 1 --release-policy merged \
+  --parent-agent <agent> --parent-model <model>
+```
+
+Without `--parent-agent` and `--parent-model`, the command stops with
+`parent-route-required`; discovery runs before that check, so omitting them can
+still spend probe quota. `--skip-capability-discovery` also skips probing, but
+it is used only when no capabilities file is given, and that plan has no
+verified routes.
+
+The rehearsal confirms: CLI authentication, a verified model route, worktree
+creation (`scripts/issue-worktree.sh create`), an independent reviewer on a
+different route, and passing quality gates.
+
+### 12.4 Boundaries for one day of work
+
+- Keep parallelism small (`--max-parallel 1` or `2`) and set a cut-off time;
+  stop starting new Issues when it arrives.
+- Issue creation, push, PR, merge and deploy are separate permissions. Take
+  each one from the written permission in step 1; absence means local only.
+
+### 12.5 Interruption and recovery
+
+- **Expired login, quota exhausted, or a stopped session**: the Issue worktree
+  and its uncommitted work stay as they are. Re-authenticate or switch route,
+  then resume with [`handoff-issue`](../skills/handoff-issue/SKILL.md)
+  (`bash scripts/issue-worktree.sh status <issue> --json`, then `handoff`). Do
+  not create a second worktree and do not discard inherited WIP.
+- **Stopping running workers**: the dispatcher does not forward SIGINT or
+  SIGTERM to its workers, and each worker runs in its own detached process group
+  whose ID equals the worker PID. Interrupting or killing only the dispatcher can
+  leave a worker running. To stop a run:
+  1. Find the dispatcher and worker processes you started, for example
+     `ps -axo pid,ppid,pgid,command | grep -E 'issue-(dispatch|orchestrator)|<worker-command>'`.
+     Match the worker by its parent PID (the dispatcher) and its worktree path
+     from `status <issue> --json`. Do not match on the agent name alone.
+  2. Send SIGTERM to the worker's process group, `kill -TERM -<pgid>`, and then to
+     the dispatcher PID. Do not send it to a shared daemon.
+  3. Check that nothing is left: `ps -g <pgid>` shows no processes, and the
+     dispatcher PID is gone.
+  4. Check that the WIP is intact: `status <issue> --json` still shows the same
+     `head`, the `dirty` state you recorded, and `git_operation: none`.
+
+  Ask before stopping shared agent daemons (such as `codex app-server` or
+  `opencode serve`) or other sessions' processes. Stopping a worker does not
+  delete the worktree. The lease expires after `ISSUE_WORKTREE_LEASE_TTL_SEC`
+  seconds (1 hour by default). Once it has expired, `handoff` can take it over
+  even if the recorded PID is still running. See
+  [`github-operations.md`](github-operations.md) §2.
+  This procedure is written from the launcher code and has not been run against
+  a live worker; a real stop test is still open.
+
+- **Release the lease** when you are done with an Issue you will not resume:
+  `bash scripts/issue-worktree.sh release <issue> --session <id>`.
+
+### 12.6 Handover and local leftovers
+
+Hand over work as pushed branches/PRs where posting is allowed, otherwise as
+a patch or bundle (`git format-patch`, `git bundle`) given to the owner.
+Before leaving the machine, review what remains locally: `git worktree list`,
+`.worktrees/`, `state/`, `.git/issue-worktrees/`, and CLI credentials
+(`gh auth status`; log out of identities you added). Remove only items you
+created and have verified are merged or handed over (`cleanup <issue> --pr
+<number>` after merge). Never auto-delete credentials or unmerged WIP; confirm
+with the owner first.
+
 ## Tooling state name migration
 
 The orchestration tools and skill now use the `issue-` prefix and

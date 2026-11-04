@@ -59,6 +59,10 @@ is needed for orchestration, generation and worktree ownership operations. Recom
 declared by `agents/runtimes/*.json` are used as worker or reviewer routes only
 after a headless probe verifies them at run time.
 
+Using a borrowed PC or a repository chosen on the day (for example a company
+trial)? See the start, stop and recovery steps in
+[`docs/development.md`](docs/development.md) §12.
+
 ## How the workflow fits together
 
 1. **File an Issue** with the `create-issue` skill: one type label, an optional
