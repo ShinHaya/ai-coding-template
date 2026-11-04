@@ -41,17 +41,36 @@ if [ -f "$GIT_DIR/MERGE_HEAD" ] \
 fi
 
 # --- Skip: [skip-hooks] in this commit's message ------------------
-# Git strips comment lines and everything below the scissors line only
-# after this hook runs, so ignore them here: an editor template or the
-# `git commit -v` diff must not trigger a skip.
+# Git cleans the message only after this hook runs, so mirror that cleanup
+# and decide on what the commit will actually record: the marker counts only
+# where Git keeps it. An editor template or `git commit -v` diff must not
+# trigger a skip, and a marker Git preserves must not be ignored.
+#
+# Git runs commit hooks with GIT_EDITOR=: when it does not open an editor.
+# Its default cleanup is `strip` for an edited message and `whitespace`
+# otherwise; commit.cleanup overrides that default. A `--cleanup` option on
+# the command line is not visible to hooks, so it is not mirrored here.
+EDITED=1
+[ "${GIT_EDITOR-}" = ":" ] && EDITED=0
+CLEANUP=$(git config --get commit.cleanup 2>/dev/null || true)
+case "$CLEANUP" in
+  strip|whitespace|verbatim|scissors) ;;
+  *) if [ "$EDITED" = "1" ]; then CLEANUP='strip'; else CLEANUP='whitespace'; fi ;;
+esac
 COMMENT_CHAR=$(git config --get core.commentChar 2>/dev/null || true)
 case "$COMMENT_CHAR" in
   ?) ;;
   *) COMMENT_CHAR='#' ;;
 esac
-MESSAGE_BODY=$(awk -v c="$COMMENT_CHAR" '
-  $0 == c " ------------------------ >8 ------------------------" { exit }
-  substr($0, 1, 1) == c { next }
+# The scissors line cuts an edited message (it is how `-v` adds its diff);
+# `strip` also drops comment lines. Other cases keep the text as written.
+CUT_AT_SCISSORS=0
+if [ "$EDITED" = "1" ] && [ "$CLEANUP" != "verbatim" ]; then CUT_AT_SCISSORS=1; fi
+STRIP_COMMENTS=0
+[ "$CLEANUP" = "strip" ] && STRIP_COMMENTS=1
+MESSAGE_BODY=$(awk -v c="$COMMENT_CHAR" -v cut="$CUT_AT_SCISSORS" -v strip="$STRIP_COMMENTS" '
+  cut == 1 && $0 == c " ------------------------ >8 ------------------------" { exit }
+  strip == 1 && substr($0, 1, 1) == c { next }
   { print }
 ' "$MSG_FILE")
 case "$MESSAGE_BODY" in

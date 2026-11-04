@@ -139,41 +139,109 @@ test(
   },
 );
 
+// Simulates an interactive editor: prepends EDIT_PREFIX to the message file
+// Git prepared (its comment template and, with -v, the scissors line and diff).
+const EDITOR_SCRIPT = `#!/bin/sh
+{ printf '%s\\n' "$EDIT_PREFIX"; cat "$1"; } > "$1.tmp" && mv "$1.tmp" "$1"
+`;
+
+/**
+ * Commit with the given git arguments and failing gates, then check that the
+ * hook skipped exactly when the recorded commit message keeps the marker.
+ */
+function commitAndCompare(repo, args, extraEnv = {}) {
+  repo.takeGates();
+  const result = repo.run(["commit", "--allow-empty", ...args], {
+    extraEnv: { GATE_FAIL: "1", ...extraEnv },
+  });
+  const gates = repo.takeGates();
+  if (result.status !== 0) {
+    // Gates ran and blocked the commit; record it with passing gates to see
+    // the message Git would have kept.
+    assert.deepEqual(gates, ["format"]);
+    const recorded = repo.run(["commit", "--allow-empty", ...args], {
+      extraEnv,
+    });
+    assert.equal(recorded.status, 0, recorded.stderr);
+    repo.takeGates();
+    return { skipped: false, message: repo.git("log", "-1", "--format=%B") };
+  }
+  assert.deepEqual(gates, []);
+  return { skipped: true, message: repo.git("log", "-1", "--format=%B") };
+}
+
 test(
-  "commit-msg ignores [skip-hooks] in comment lines and the verbose diff",
+  "commit-msg ignores [skip-hooks] that Git strips from an edited message",
   { skip: consumerHooks },
   (t) => {
     const repo = repository(t);
     assert.equal(repo.commit("init").status, 0);
-    repo.takeGates();
+    const editor = path.join(repo.root, "..", "editor.sh");
+    fs.writeFileSync(editor, EDITOR_SCRIPT, { mode: 0o755 });
     // A tracked change that itself mentions the marker shows up in `-v` output.
     fs.writeFileSync(
       path.join(repo.root, "notes.txt"),
       "use [skip-hooks] sparingly\n",
     );
     repo.git("add", "notes.txt");
-    const messageFile = path.join(repo.root, "..", "message.txt");
-    fs.writeFileSync(
-      messageFile,
-      [
-        "add notes",
-        "",
-        "# Please enter the commit message. [skip-hooks]",
-        "# ------------------------ >8 ------------------------",
-        "+use [skip-hooks] sparingly",
-        "",
-      ].join("\n"),
-    );
-    const result = repo.run(
-      ["commit", "--cleanup=scissors", "-F", messageFile],
-      {
-        extraEnv: { GATE_FAIL: "1" },
-      },
-    );
-    assert.notEqual(result.status, 0);
-    assert.deepEqual(repo.takeGates(), ["format"]);
+    const outcome = commitAndCompare(repo, ["-v"], {
+      GIT_EDITOR: editor,
+      EDIT_PREFIX: "add notes\n\n# my own note [skip-hooks]",
+    });
+    assert.equal(outcome.skipped, false);
+    assert.equal(outcome.message, "add notes");
   },
 );
+
+for (const scenario of [
+  {
+    name: "a comment-like paragraph kept by -m",
+    args: ["-m", "subject", "-m", "# [skip-hooks]"],
+  },
+  {
+    name: "text below a literal scissors line in -F input",
+    file: [
+      "subject",
+      "",
+      "# ------------------------ >8 ------------------------",
+      "[skip-hooks]",
+      "",
+    ],
+  },
+  {
+    name: "a comment line of an edited message under commit.cleanup=verbatim",
+    config: ["commit.cleanup", "verbatim"],
+    edit: "subject\n\n# [skip-hooks]",
+  },
+]) {
+  test(
+    `commit-msg honors [skip-hooks] that Git keeps: ${scenario.name}`,
+    { skip: consumerHooks },
+    (t) => {
+      const repo = repository(t);
+      assert.equal(repo.commit("init").status, 0);
+      let args = scenario.args ?? [];
+      const extraEnv = {};
+      if (scenario.file) {
+        const messageFile = path.join(repo.root, "..", "message.txt");
+        fs.writeFileSync(messageFile, scenario.file.join("\n"));
+        args = ["-F", messageFile];
+      }
+      if (scenario.config) repo.git("config", ...scenario.config);
+      if (scenario.edit) {
+        const editor = path.join(repo.root, "..", "editor.sh");
+        fs.writeFileSync(editor, EDITOR_SCRIPT, { mode: 0o755 });
+        Object.assign(extraEnv, {
+          GIT_EDITOR: editor,
+          EDIT_PREFIX: scenario.edit,
+        });
+      }
+      const outcome = commitAndCompare(repo, args, extraEnv);
+      assert.ok(outcome.message.includes("[skip-hooks]"), outcome.message);
+      assert.equal(outcome.skipped, true);
+    },
+  );
+}
 
 test(
   "commit-msg skips the gates for a [skip-hooks] first commit in a new linked worktree",
