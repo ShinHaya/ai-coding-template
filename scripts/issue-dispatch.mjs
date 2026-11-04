@@ -6,15 +6,118 @@
  * Uses the same exact selector / model pair that capability discovery recorded.
  * On timeout or interruption, only the worker process tree is terminated; the
  * Issue worktree is left untouched for handoff-issue.
+ *
+ * A worker that owns the Issue worktree (single-worker mode or the implementer
+ * role) gets a fresh lease session ID. While the worker runs, the dispatcher
+ * renews that session's lease (a heartbeat) and records its own PID as the
+ * owner, because some runtimes run commands through a long-running server
+ * whose PID would otherwise pin the lease after the worker exits.
  */
 
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildRoleDispatchPayload } from "./issue-roles.mjs";
+import { buildRoleDispatchPayload, ROLES } from "./issue-roles.mjs";
 import { launchWithAdapter } from "./issue-runtime-adapters/index.mjs";
 import { selectorTargetsRoute } from "./issue-runtime-adapters/shared.mjs";
+
+const WORKTREE_HELPER = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "issue-worktree.sh",
+);
+export const DEFAULT_LEASE_TTL_SEC = 3600;
+const HEARTBEAT_HELPER_TIMEOUT_MS = 60_000;
+
+/** Reviewers and planners only read the worktree; they never hold its lease. */
+export function roleOwnsWorktreeLease(role) {
+  return role === undefined || role === ROLES.IMPLEMENTER;
+}
+
+/**
+ * Renew well inside the lease lifetime (a third of it), so one missed or slow
+ * renewal does not let the lease lapse while the worker is still running.
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function leaseHeartbeatIntervalMs(env = process.env) {
+  const raw = env.ISSUE_WORKTREE_LEASE_TTL_SEC;
+  const ttlSec =
+    raw === undefined || raw === "" ? DEFAULT_LEASE_TTL_SEC : Number(raw);
+  if (!Number.isSafeInteger(ttlSec) || ttlSec <= 0)
+    throw new Error("invalid-lease-ttl");
+  return Math.max(1_000, Math.floor((ttlSec * 1_000) / 3));
+}
+
+/** @returns {Promise<void>} */
+function runWorktreeHelper(args, { cwd, env }) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "bash",
+      [WORKTREE_HELPER, ...args],
+      { cwd, env, timeout: HEARTBEAT_HELPER_TIMEOUT_MS },
+      (error) => (error ? reject(error) : resolve()),
+    );
+  });
+}
+
+/**
+ * Periodically renew one session's Issue worktree lease until stop().
+ *
+ * Each beat is `issue-worktree.sh acquire --heartbeat`, which only extends a
+ * lease this session actively holds: it never creates, reactivates, or takes
+ * over a lease. A failed beat is expected before the worker has created or
+ * handed off the worktree, so failures are ignored and the next beat retries.
+ * Once the worker exits and beats stop, the lease expires and can be handed off.
+ *
+ * @param {object} input
+ * @param {number} input.issueNumber
+ * @param {string} input.session
+ * @param {number} input.ownerPid - recorded as owner.pid on each renewal
+ * @param {number} input.intervalMs
+ * @param {string} [input.cwd]
+ * @param {NodeJS.ProcessEnv} [input.env]
+ * @param {(args: string[], options: { cwd?: string, env: NodeJS.ProcessEnv }) => Promise<unknown>} [input.runHelper]
+ */
+export function startLeaseHeartbeat({
+  issueNumber,
+  session,
+  ownerPid,
+  intervalMs,
+  cwd,
+  env = process.env,
+  runHelper = runWorktreeHelper,
+}) {
+  const helperEnv = { ...env, ISSUE_WORKTREE_OWNER_PID: String(ownerPid) };
+  const args = [
+    "acquire",
+    String(issueNumber),
+    "--session",
+    session,
+    "--heartbeat",
+  ];
+  let stopped = false;
+  let inFlight = false;
+  const beat = () => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    Promise.resolve()
+      .then(() => runHelper(args, { cwd, env: helperEnv }))
+      .catch(() => {})
+      .finally(() => {
+        inFlight = false;
+      });
+  };
+  const timer = setInterval(beat, intervalMs);
+  timer.unref?.();
+  return {
+    stop() {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
 
 /**
  * Launch a worker for one Issue on one capability route.
@@ -71,6 +174,28 @@ export async function dispatchWorker(input, ctx = {}) {
           ...(input.fixCycle === undefined ? {} : { fixCycle: input.fixCycle }),
         });
 
+  // Development-only Jev credentials belong to the triage child, never workers.
+  const workerEnv = { ...(ctx.env ?? process.env) };
+  delete workerEnv.TYPESAFE_API_KEY;
+  // A lease inherited from an enclosing session belongs to that session only.
+  delete workerEnv.ISSUE_WORKTREE_SESSION;
+  delete workerEnv.ISSUE_WORKTREE_OWNER_PID;
+
+  const ownsLease = roleOwnsWorktreeLease(input.role);
+  const leaseSession = ownsLease
+    ? (ctx.leaseSessionId ?? `dispatch-${input.issueNumber}-${randomUUID()}`)
+    : undefined;
+  const ownerPid = ctx.ownerPid ?? process.pid;
+  const heartbeatIntervalMs = ownsLease
+    ? leaseHeartbeatIntervalMs(workerEnv)
+    : undefined;
+  if (ownsLease) {
+    // The env reaches a CLI-spawned worker's shell; the prompt carries the
+    // same session to runtimes whose commands run in a separate server.
+    workerEnv.ISSUE_WORKTREE_SESSION = leaseSession;
+    workerEnv.ISSUE_WORKTREE_OWNER_PID = String(ownerPid);
+  }
+
   const job = {
     ...rolePayload,
     agent: route.agent,
@@ -79,15 +204,25 @@ export async function dispatchWorker(input, ctx = {}) {
     selector: route.selector,
     timeoutMs: route.timeoutMs,
     cwd: input.cwd,
+    ...(leaseSession === undefined ? {} : { leaseSession }),
   };
 
-  // Development-only Jev credentials belong to the triage child, never workers.
-  const workerEnv = { ...(ctx.env ?? process.env) };
-  delete workerEnv.TYPESAFE_API_KEY;
   const handle = await launchWithAdapter(route.agent, job, {
     ...ctx,
     env: workerEnv,
   });
+  const heartbeat = ownsLease
+    ? (ctx.startLeaseHeartbeat ?? startLeaseHeartbeat)({
+        issueNumber: input.issueNumber,
+        session: leaseSession,
+        ownerPid,
+        intervalMs: heartbeatIntervalMs,
+        cwd: input.cwd ?? ctx.cwd,
+        env: workerEnv,
+      })
+    : undefined;
+  // Heartbeats last exactly as long as the worker: stop on exit or spawn error.
+  const done = Promise.resolve(handle.wait()).finally(() => heartbeat?.stop());
   return {
     agent: route.agent,
     model: route.model,
@@ -96,7 +231,7 @@ export async function dispatchWorker(input, ctx = {}) {
     ...(input.role === undefined ? {} : { role: input.role }),
     pid: handle.pid,
     kill: handle.kill,
-    wait: handle.wait,
+    wait: () => done,
     get timedOut() {
       return handle.timedOut;
     },

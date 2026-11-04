@@ -84,6 +84,34 @@ worktree gate to this section.
 Parallelism is across different Issue worktrees. The same Issue worktree is
 single-owner and guarded by a session lease; simultaneous editing is forbidden.
 
+The lease rules:
+
+- The lease records the owner session, host, PID, and `expires_at_epoch`. The
+  lifetime is `ISSUE_WORKTREE_LEASE_TTL_SEC` seconds, 1 hour by default. The
+  default is not raised to fit long workers. A session keeps its lease only by
+  renewing it.
+- Renew with
+  `scripts/issue-worktree.sh acquire <issue> --agent <agent-id> --session <id>`
+  from the owning session. `scripts/issue-dispatch.mjs` gives each worker that
+  owns the worktree a fresh session ID, through the prompt and
+  `ISSUE_WORKTREE_SESSION`. It renews the lease every third of the lifetime
+  with `acquire --heartbeat` while the worker runs. A heartbeat only extends
+  an active lease of the same session. It never reactivates a released lease
+  and never takes over another session's lease.
+- The dispatcher records its own PID as the owner (`ISSUE_WORKTREE_OWNER_PID`).
+  It lives exactly as long as the worker. Runtimes that run commands through
+  a long-running server (`opencode serve`, Codex app-server) would otherwise
+  record the server's PID, which outlives the worker.
+- `handoff` is refused while the lease is held: it has not expired, and its
+  owner PID is running on the same host. The refusal names the PID, its
+  command, and the expiry. An expired lease can be handed off even when the
+  recorded PID is still running, because PIDs are reused and servers outlive
+  workers.
+- Before every commit and push, the owning session runs `acquire`. If it
+  fails, another session has taken the Issue over. The old session stops
+  writing, so two sessions never write to the same worktree after a missed
+  renewal.
+
 Keep agent worktrees **inside** the primary repository root under `.worktrees/`,
 so they stay within sandbox write roots (especially Codex). Avoid sibling paths
 such as `../<repo>-codex`; they are easy to misconfigure against the sandbox and
@@ -292,6 +320,11 @@ and a PR head matching the worktree HEAD:
 ```bash
 bash scripts/issue-worktree.sh cleanup <issue> --pr <pr-number>
 ```
+
+If the session that owned the lease is gone and never released it, run
+`handoff` from your own session once the lease has expired. Then run
+`release` with that session, then `cleanup`. Do not stop a long-running
+server process to make the handoff possible.
 
 `CLOSED`, a closed Issue, deleted remote branch, or branch ancestry alone is
 not proof of merge. The normal cleanup flow never force-removes a worktree.

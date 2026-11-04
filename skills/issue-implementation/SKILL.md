@@ -47,8 +47,32 @@ that setting is omitted. Follow its Issue worktree rules.
 3. Create and acquire the Issue worktree with the lifecycle helper, passing the
    current agent and a non-sensitive stable session identifier:
    `bash scripts/issue-worktree.sh create <issue> <slug> --agent <agent> --session <session-id>`.
+   When `scripts/issue-dispatch.mjs` launched this session, use the lease
+   session ID from the prompt (also in `ISSUE_WORKTREE_SESSION`). Do not make
+   up another one. Otherwise record the session ID you chose, because every
+   later `acquire` and `release` call needs the same value.
 4. Move **all** subsequent operations to the absolute path printed by the helper.
 5. If creation or validation fails: stop and report. No primary-tree fallback.
+
+### Keep the lease
+
+The lease expires `ISSUE_WORKTREE_LEASE_TTL_SEC` seconds after it was last
+renewed (default 1 hour). After that, another session can take the worktree
+over with `handoff`, even if the recorded owner process is still running.
+Renew the lease by running `acquire` again from the same session:
+
+```bash
+bash scripts/issue-worktree.sh acquire <issue> --agent <agent> --session <session-id>
+```
+
+- A worker launched by `scripts/issue-dispatch.mjs` gets its lease renewed by
+  the dispatcher while it runs. It still runs the check before each commit
+  and push.
+- Without the dispatcher, run `acquire` before each long step (quality gates,
+  reviewer dispatch, CI watch) and at least once per lease period.
+- **Before every commit and every push, run `acquire`.** If it fails, another
+  session took the Issue over. Stop without committing or pushing, and report
+  this to the user. Never run `handoff` to take the lease back.
 
 ## Workflow
 
