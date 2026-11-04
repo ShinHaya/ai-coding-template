@@ -22,7 +22,14 @@ credentials, or real payment details while running this checklist.
 
 ## 1. Install / first run
 
-<!-- Packaging, first launch, and initial setup on a clean machine or profile. -->
+Borrowed PC or undecided repository: see
+[`development.md`](development.md) §12. Record results outside Git.
+
+- [ ] `gh auth status` shows the intended identity
+- [ ] `gh repo view` target matches `GITHUB_REPOSITORY` (or it is unset)
+- [ ] Existing agent files, hooks and CI were inspected and left unchanged
+- [ ] Posting permission recorded; if absent, no Issue/push/PR was made
+- [ ] Fake-data rehearsal: worktree create, reviewer on another route, gates
 
 ## 2. Core flow
 
@@ -31,8 +38,10 @@ step. -->
 
 ## 3. Failure and interruption paths
 
-<!-- What the user sees on error, cancellation, loss of connectivity, and
-resume after interruption. -->
+- [ ] After stopping a worker, `.worktrees/issue-*` WIP is intact
+- [ ] `handoff` resumes it from a new session without a duplicate worktree
+- [ ] After login expiry or quota exhaustion, work resumes via `handoff-issue`
+- [ ] On leaving, local worktrees, `state/` and CLI logins were reviewed
 
 ## 4. Privacy and security spot checks
 

@@ -286,6 +286,110 @@ at it from `AGENTS.md`.
   (`.git/issue-worktrees/`), not in the worktree.
 - `.worktrees/` holds per-Issue agent worktrees and is git-ignored.
 
+## 12. Borrowed-PC And Undecided-Repository Trial
+
+Use this when the machine or the target GitHub repository is not known until
+the day (for example a company trial). Keep company-specific facts and the
+filled-in checklist outside Git (a scratch note or `state/`, which is
+git-ignored). Run only the **minimum path** to start or stop; the rest is
+optional detail.
+
+### 12.1 Minimum start path
+
+1. **Pick the posting target and write it down**: `owner/name`, visibility
+   (public/private), the identity `gh auth status` reports, and whether
+   Issues, pushes, PRs, merges and deploys are each allowed. Unknown means
+   not allowed.
+2. **Stop here if posting is not allowed.** Work locally only: do not file
+   Issues, push, or open PRs. The Issue-and-worktree workflow in
+   [`github-operations.md`](github-operations.md) needs an Issue; if the
+   environment cannot provide one, stop and decide a separate policy with the
+   Product Owner instead of bypassing it. Never copy a company's problem text
+   into a personal or public repository.
+3. **Check the target before any run** (read-only):
+
+   ```bash
+   gh auth status
+   gh repo view --json nameWithOwner,visibility,viewerPermission
+   echo "${GITHUB_REPOSITORY:-<unset>}"
+   ```
+
+   `GITHUB_REPOSITORY` overrides the repository detected from the checkout
+   (§10). If it is set and differs from `nameWithOwner`, run `unset
+GITHUB_REPOSITORY` or fix it before continuing; otherwise Issues and PRs
+   go to the wrong repository.
+
+4. **Inspect what already exists** before applying the template: existing
+   `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`, `.githooks/` and `core.hooksPath`,
+   `.github/workflows/`, and branch protection. Do not overwrite them and do
+   not run `ai-template.mjs sync --adopt` on a company repository without
+   explicit approval; `sync` is a reviewed change, not a setup step. Do not
+   register the repository with any sync target without approval.
+5. **Install** per §2.2 (`bash scripts/setup-hooks.sh`, `npm ci`). If
+   `setup-hooks.sh` stops because `core.hooksPath` is already set, leave it and
+   report; do not unset a company hook manager.
+
+### 12.2 Two repository cases
+
+| Case                               | Do                                                                                                                | Do not                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Company's existing repository      | Follow its rules first; add the template only in a branch/PR they approve; use the company-approved identity.     | Overwrite its agent files, hooks or CI; push or open PRs unapproved |
+| Your own working repository (fake) | Use fake data only; rehearse the workflow; keep it private if any company-derived wording could appear in Issues. | Mirror company Issue content into it                                |
+
+### 12.3 Rehearsal with fake data
+
+Rehearse in a throwaway repository you own, with invented Issue text.
+Distinguish the two kinds of check:
+
+- **Read-only preparation** (no model is executed, no repository text is
+  sent): `gh auth status`, `node scripts/repository-config.mjs`,
+  `node scripts/issue-model-catalog.mjs refresh` and `show` (lists models
+  only), `node scripts/issue-orchestrator.mjs --issues <n> --dry-run`, and the
+  quality gates in §8.
+- **Paid / outbound probes** (execute a real model and send prompts to the
+  provider; cost quota and transmit the probe prompt): `node
+scripts/issue-capabilities.mjs` (probes each candidate route) and any real
+  `issue-dispatch.mjs` / orchestrator run. Run them only with fake data, only
+  after the company's AI-use rules allow the provider, and record that you
+  did.
+
+The rehearsal confirms: CLI authentication, a verified model route, worktree
+creation (`scripts/issue-worktree.sh create`), an independent reviewer on a
+different route, and passing quality gates.
+
+### 12.4 Boundaries for one day of work
+
+- Keep parallelism small (`--max-parallel 1` or `2`) and set a cut-off time;
+  stop starting new Issues when it arrives.
+- Issue creation, push, PR, merge and deploy are separate permissions. Take
+  each one from the written permission in step 1; absence means local only.
+
+### 12.5 Interruption and recovery
+
+- **Expired login, quota exhausted, or a stopped session**: the Issue worktree
+  and its uncommitted work stay as they are. Re-authenticate or switch route,
+  then resume with [`handoff-issue`](../skills/handoff-issue/SKILL.md)
+  (`bash scripts/issue-worktree.sh status <issue> --json`, then `handoff`). Do
+  not create a second worktree and do not discard inherited WIP.
+- **Stopping running workers**: stop the orchestrator/dispatcher process you
+  started (interrupt it in its terminal, or kill that PID). Ask before
+  stopping shared agent daemons or other sessions' processes. Stopping a
+  worker does not delete the worktree; the lease expires (§ lease TTL) and
+  `handoff` takes it over later.
+- **Release the lease** when you are done with an Issue you will not resume:
+  `bash scripts/issue-worktree.sh release <issue> --session <id>`.
+
+### 12.6 Handover and local leftovers
+
+Hand over work as pushed branches/PRs where posting is allowed, otherwise as
+a patch or bundle (`git format-patch`, `git bundle`) given to the owner.
+Before leaving the machine, review what remains locally: `git worktree list`,
+`.worktrees/`, `state/`, `.git/issue-worktrees/`, and CLI credentials
+(`gh auth status`; log out of identities you added). Remove only items you
+created and have verified are merged or handed over (`cleanup <issue> --pr
+<number>` after merge). Never auto-delete credentials or unmerged WIP; confirm
+with the owner first.
+
 ## Tooling state name migration
 
 The orchestration tools and skill now use the `issue-` prefix and
