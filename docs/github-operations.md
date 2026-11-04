@@ -275,6 +275,11 @@ direct-review --review-pass 1`. The reviewer works read-only in the Issue
   and are not re-reviewed.
 - When no distinct route exists, the run records `same-route-reviewer:*`; when
   route discovery fails, the PR states that no reviewer pass ran.
+- "Read-only" is the reviewer's `read-only` permission profile: on runtimes that
+  enforce it, file-edit tools are disabled and only read-only git/gh commands
+  plus the verdict comment are allowed. It is not OS isolation. A runtime whose
+  read-only profile cannot reach GitHub (Codex) is not assigned as reviewer.
+  See `development.md`, "Worker permissions".
 
 Reviewer output is fast feedback, not a replacement for the Product Owner's
 merge judgment.

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { runtimeEnvironment, findRuntime } from "./ai-template/registry.mjs";
 import { buildRuntimeEnvironment } from "./issue-runtime-adapters/environment.mjs";
 
 /**
@@ -24,7 +23,17 @@ import { fileURLToPath } from "node:url";
 
 import { buildRoleDispatchPayload, ROLES } from "./issue-roles.mjs";
 import { launchWithAdapter } from "./issue-runtime-adapters/index.mjs";
-import { selectorTargetsRoute } from "./issue-runtime-adapters/shared.mjs";
+import {
+  selectorHasPermissionArgs,
+  selectorTargetsRoute,
+} from "./issue-runtime-adapters/shared.mjs";
+import {
+  findRuntime,
+  loadRuntimeRegistry,
+  resolvePermission,
+  runtimeEnvironment,
+  runtimePermissionSummary,
+} from "./ai-template/registry.mjs";
 
 const WORKTREE_HELPER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,6 +41,28 @@ const WORKTREE_HELPER = path.join(
 );
 export const DEFAULT_LEASE_TTL_SEC = 3600;
 const HEARTBEAT_HELPER_TIMEOUT_MS = 60_000;
+
+/**
+ * Resolve the permission profile `role` runs with on this route, failing closed.
+ * The route must carry no permission argv of its own and must have been probed
+ * under the current permission policy; the argv itself is rebuilt at launch.
+ * @returns {{ profile: string, enforcement: string }}
+ */
+export function routePermission(route, role, root) {
+  if (selectorHasPermissionArgs(route, root))
+    throw new Error("route-permission-args-forbidden");
+  const runtime = findRuntime(route.agent, root, { enabledOnly: true });
+  if (!runtime) throw new Error(`dispatch-adapter-unavailable:${route.agent}`);
+  const registry = loadRuntimeRegistry(root);
+  if (
+    route.permissionFingerprint !==
+    runtimePermissionSummary(registry, runtime).fingerprint
+  )
+    throw new Error("route-permission-mismatch");
+  const permission = resolvePermission(registry, runtime, role);
+  if (permission.unavailable) throw new Error(permission.unavailable);
+  return { profile: permission.profile, enforcement: permission.enforcement };
+}
 
 /** Reviewers and planners only read the worktree; they never hold its lease. */
 export function roleOwnsWorktreeLease(role) {
@@ -135,6 +166,7 @@ export function startLeaseHeartbeat({
  * @param {number} input.issueNumber
  * @param {string} input.releasePolicy
  * @param {string} input.nextMilestone
+ * @param {string} [input.purpose] - enterprise attestation purpose; defaults to the role
  * @param {string} [input.role] - planner | implementer | reviewer; omitted in single-worker mode
  * @param {string} [input.skill] - issue-implementation | handoff-issue
  * @param {string} [input.executionMode]
@@ -158,6 +190,7 @@ export async function dispatchWorker(input, ctx = {}) {
   // Ensure the selector still parses and still targets the same model token.
   if (!selectorTargetsRoute(route, input.cwd ?? ctx.cwd))
     throw new Error("model-mismatch");
+  const permission = routePermission(route, input.role, input.cwd ?? ctx.cwd);
 
   // The role-scoped half of the job goes through the closed-payload builder,
   // so the deny-list guard runs on the live dispatch path, not only in tests.
@@ -210,6 +243,10 @@ export async function dispatchWorker(input, ctx = {}) {
     selector: route.selector,
     timeoutMs: route.timeoutMs,
     cwd: input.cwd,
+    // Enterprise route attestation: the purpose is the dispatch role; absent means denied there.
+    ...((input.purpose ?? input.role)
+      ? { purpose: input.purpose ?? input.role }
+      : {}),
     ...(leaseSession === undefined ? {} : { leaseSession }),
   };
 
@@ -236,6 +273,7 @@ export async function dispatchWorker(input, ctx = {}) {
     selector: route.selector,
     issueNumber: input.issueNumber,
     ...(input.role === undefined ? {} : { role: input.role }),
+    permission,
     pid: handle.pid,
     kill: handle.kill,
     wait: () => done,
@@ -325,6 +363,7 @@ async function main() {
       model: handle.model,
       issueNumber: handle.issueNumber,
       ...(handle.role === undefined ? {} : { role: handle.role }),
+      permission: handle.permission,
       pid: handle.pid,
     })}\n`,
   );

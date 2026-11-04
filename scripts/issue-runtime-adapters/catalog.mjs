@@ -20,6 +20,7 @@ import {
   isRetiredCommand,
   runtimeEnvironment,
 } from "../ai-template/registry.mjs";
+import { runtimeHasApprovedRoute } from "../enterprise-route-policy.mjs";
 
 /**
  * @typedef {{ model: string, label: string }} CatalogModel
@@ -72,6 +73,9 @@ export async function fetchRuntimeCatalog(definition, ctx = {}) {
   const source = catalogSource(definition);
   if (definition.retired)
     return { status: "failed", reason: REASON_CODES.CLI_NOT_FOUND, source };
+  // Enterprise mode: no catalog/listing/auth CLI call unless the runtime has an attested route.
+  if (!runtimeHasApprovedRoute(definition.id, { root: ctx.cwd }))
+    return { status: "failed", reason: REASON_CODES.ENTERPRISE_DENIED, source };
   const cliPath = await resolveRuntimeCli(definition, ctx);
   if (!cliPath)
     return { status: "failed", reason: REASON_CODES.CLI_NOT_FOUND, source };

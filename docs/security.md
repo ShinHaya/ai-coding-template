@@ -66,6 +66,127 @@ This template has no cloud project. The procedure is
 and the `Deploy failure diagnosis` section of
 [`development.md`](development.md).
 
+### Enterprise route attestation (opt-in)
+
+Set `enterprise.routeAttestation: true` in `.ai-template/config.json` to admit
+only routes attested in a local record, `state/enterprise-route-attestation.json`
+(ignored by Git; keep it owner-readable only, e.g. `chmod 600`). Default is off.
+The ship-with defaults approve nothing; approved services, purposes and
+acceptable values are enterprise decisions.
+
+The record (`version: 1`) lists, per exact `runtime` + `requestedModel`: the
+upstream `provider`, expected `canonicalModel`, approved `purposes`
+(`planner`, `implementer`, `reviewer`, `parent`, `triage`), `verifiedOn` and
+`expiresOn` dates, and four independent conditions (`trainingOptOut`,
+`retention`, `externalTransmission`, `telemetry`). Each condition has a `value`,
+a `confirmation` (`self-declared`, `machine-verified`, `unconfirmed`) and a
+non-sensitive `evidence` reference. A top-level `acceptable` map names the values
+the operator accepts for each condition. Opt-out never implies zero retention.
+Never put credentials, account IDs, prompts, responses or logs in the record.
+
+Behavior: a missing, malformed, ambiguous, expired, future-dated or changed
+record, an unaccepted or `unconfirmed` condition, a missing purpose, or a
+canonical-model mismatch denies the route. `machine-verified` is also denied
+because no supported check supplies machine evidence; use `self-declared`.
+The check runs before any catalog listing or model probe, again after the probe
+(canonical model), on every cached or supplied capability, and immediately before
+launch (dispatch passes the role as purpose; a dispatch without a role or
+`purpose` is denied). The existing `agents.models` allow/deny rules still apply.
+Denials expose only closed reason codes. Benchmark runs
+(`issue-route-benchmark.mjs`) are denied before any process starts unless the
+route is attested for `triage`. The purpose is otherwise enforced only at
+`dispatchWorker` launch; route selection and TypeSafe triage do not check it.
+`requestedModel`/`canonicalModel` may be CLI display names with single spaces
+(for example `GPT Test`). A syntactically valid but malformed `enterprise` config
+shape is treated as mode on (fail closed).
+
+Bootstrap: create the record by hand before enabling the mode. Minimal shape:
+
+```json
+{
+  "version": 1,
+  "acceptable": {
+    "trainingOptOut": ["opted-out"],
+    "retention": ["zero"],
+    "externalTransmission": ["provider-only"],
+    "telemetry": ["disabled"]
+  },
+  "routes": [
+    {
+      "runtime": "claude",
+      "provider": "example-provider",
+      "requestedModel": "sonnet",
+      "canonicalModel": "example-model-1",
+      "purposes": ["implementer"],
+      "verifiedOn": "2026-01-01",
+      "expiresOn": "2026-04-01",
+      "conditions": {
+        "trainingOptOut": {
+          "value": "opted-out",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "retention": {
+          "value": "zero",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "externalTransmission": {
+          "value": "provider-only",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        },
+        "telemetry": {
+          "value": "disabled",
+          "confirmation": "self-declared",
+          "evidence": "ticket-1"
+        }
+      }
+    }
+  ]
+}
+```
+
+Use the model name the CLI reports as `canonicalModel`; the catalog listing is
+gated, so read it from the CLI directly the first time.
+
+Limits: the record is local self-attestation; it does not verify an account,
+contract or provider setting. A running worker is not stopped when approval is
+revoked: stop the run yourself. This guard does not inspect other channels the
+operator must review manually: optional TypeSafe external triage (opt-in), CLI
+MCP servers/plugins and automatic sharing, and GitHub Issue/comment/PR postings.
+Do not infer a setting from a missing UI. The reported Codex "Include
+environments" setting is unknown pending vendor confirmation: treat it as neither
+enabled nor disabled. Before use, verify each condition against current official
+sources and account settings, record the source type and an expiry, and re-verify
+on change. No network lookup is added.
+
+### Worker execution permissions
+
+Orchestrated workers run AI agent CLIs on the operator's own machine. The
+template distinguishes three levels and does not present one as another:
+
+- **Prompt-level rules** (for example "do not modify anything" in a reviewer
+  prompt) are instructions, not enforcement.
+- **CLI-enforced profiles** (`enforcement: cli`) make the agent CLI refuse
+  file-edit tools and commands outside an allow list. They do not isolate the
+  machine: an allowed command runs with the user's own file and credential
+  access, and allowed commands such as `gh ... comment`, `git push` or
+  `issue-worktree.sh` write or post by themselves.
+- **OS-level isolation** is not implemented. An Issue worktree is not a sandbox.
+  Only Codex `read-only` uses the CLI's OS sandbox.
+
+Bypass profiles are never a default and need an explicit repository-config
+opt-in per runtime. `inherited` profiles leave the decision to the user's CLI
+settings, and `requireEnforcement` can exclude them. A probe whose tool calls
+are denied fails (`permission-denied`), and an approval wait in a probe or a
+worker run hits the timeout. A dispatched worker run does not check its own
+output for denials: a CLI can refuse a tool call and still exit 0, so a denied
+write is caught only downstream (quality gates, PR checks, the milestone gate).
+The template never retries with looser permissions. Workers can still read project settings such as
+`.claude/settings.json`, and a `workspace-write` implementer can edit them;
+review such changes in the PR. Details: `development.md`, "Worker permissions".
+
 ## 7. Input And DOM Safety
 
 <!-- How externally-supplied data is validated and escaped at each boundary. -->

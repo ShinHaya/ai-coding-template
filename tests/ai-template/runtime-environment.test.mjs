@@ -33,6 +33,20 @@ const policy = {
   inherit: ["EXAMPLE_RUNTIME_TOKEN", "HTTPS_PROXY"],
   required: ["EXAMPLE_RUNTIME_TOKEN"],
 };
+// Every non-retired runtime declares permission profiles (#63). The implementer
+// profile carries argv so a test can see it reach the same spawn as the environment.
+const permissions = {
+  flags: ["--fixture-mode"],
+  profiles: {
+    "workspace-write": {
+      args: ["--fixture-mode", "write"],
+      enforcement: "inherited",
+      network: true,
+    },
+    "worktree-setup": { args: [], enforcement: "inherited", network: true },
+    "read-only": { args: [], enforcement: "inherited", network: true },
+  },
+};
 const observation = `JSON.stringify({ allowed: process.env.EXAMPLE_RUNTIME_TOKEN === 'fake-runtime-value', proxy: process.env.HTTPS_PROXY === 'fake-proxy-value', unrelated: 'UNRELATED_SECRET' in process.env, triage: 'TYPESAFE_API_KEY' in process.env, lease: 'ISSUE_WORKTREE_SESSION' in process.env })`;
 const expected = {
   allowed: true,
@@ -178,11 +192,13 @@ test("adapter auth/list and worker boundaries apply policy before injected launc
     name: "Example",
     commands: [process.execPath],
     environment: policy,
+    permissions,
     auth: { args: ["auth"], parser: "logged-in-json" },
     models: { args: ["models"], parser: "codex-models" },
     promptArgs: [],
   };
   const seen = [];
+  const workerArgs = [];
   await fetchRuntimeCatalog(definition, {
     env: parentEnv,
     resolveExecutable: async () => process.execPath,
@@ -194,14 +210,17 @@ test("adapter auth/list and worker boundaries apply policy before injected launc
   await createAdapter(definition).launch(
     {
       env: parentEnv,
-      spawnWorker: (_command, _args, options) => {
+      spawnWorker: (_command, args, options) => {
         seen.push(options.env);
+        workerArgs.push(...args);
         return {};
       },
     },
     { selector: process.execPath, timeoutMs: 1000 },
   );
   assert.equal(seen.length, 2);
+  // The minimal environment and the registry permission argv reach one worker spawn.
+  assert.deepEqual(workerArgs.slice(0, 2), ["--fixture-mode", "write"]);
   for (const env of seen) {
     assert.equal(env.EXAMPLE_RUNTIME_TOKEN !== undefined, true);
     assert.equal(env.UNRELATED_SECRET, undefined);
@@ -284,6 +303,7 @@ else {
       name: "Example",
       commands: [cli],
       environment: policy,
+      permissions,
       auth: { args: ["auth"], parser: "logged-in-json" },
       models: { args: ["models"], parser: "codex-models" },
       selectorArgs: ["{model}"],

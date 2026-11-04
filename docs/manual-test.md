@@ -48,6 +48,13 @@ step. -->
 - [ ] No sensitive value appears in logs
 - [ ] No unexpected network destination is contacted
 - [ ] Local state files have the intended permission bits
+- [ ] In a throwaway repository with fake data, a Claude worker started with the
+      `read-only` argv is denied a file write and exits without waiting for
+      approval; with the `workspace-write` argv it can edit a file in its working
+      directory but is denied a command outside its allow list (for example
+      `curl`)
+- [ ] No probe or dispatch argv contains `bypassPermissions`, `--dangerously-*`,
+      `--always-approve` or `--auto` unless the repository config opted in
 
 ## 5. Known limitations
 

@@ -10,6 +10,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { permissionFingerprintFor } from "../../scripts/ai-template/registry.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -36,6 +37,7 @@ function runDispatch(executable, { timeoutMs = 10_000 } = {}) {
     selector: `${executable} --model sonnet`,
     selectable: true,
     verifiable: true,
+    permissionFingerprint: permissionFingerprintFor("claude", repoRoot),
     timeoutMs,
   };
   const result = spawnSync(
@@ -51,7 +53,7 @@ function runDispatch(executable, { timeoutMs = 10_000 } = {}) {
       "--next-milestone",
       "pr-created",
     ],
-    { encoding: "utf8", timeout: 30_000 },
+    { encoding: "utf8", timeout: 30_000, cwd: repoRoot },
   );
   const lines = result.stdout.trim().split("\n").filter(Boolean);
   return { status: result.status, final: JSON.parse(lines.at(-1)) };
@@ -150,9 +152,13 @@ for (const scenario of [
           role: "worker",
           model: "claude-sonnet-4-6",
           requestedModel: scenario.requestedModel,
-          selector: `claude --model ${scenario.token} --permission-mode bypassPermissions`,
+          selector: `claude --model ${scenario.token}`,
           selectable: true,
           verifiable: true,
+          permissionFingerprint: permissionFingerprintFor(
+            scenario.agent,
+            repoRoot,
+          ),
           timeoutMs: 1000,
         },
         issueNumber: 1,
@@ -189,9 +195,10 @@ function leaseDispatch({ role, env = {}, heartbeats = [] } = {}) {
         role: "worker",
         model: "claude-sonnet-4-6",
         requestedModel: "sonnet",
-        selector: "claude --model sonnet --permission-mode bypassPermissions",
+        selector: "claude --model sonnet",
         selectable: true,
         verifiable: true,
+        permissionFingerprint: permissionFingerprintFor("claude", repoRoot),
         timeoutMs: 1000,
       },
       issueNumber: 7,

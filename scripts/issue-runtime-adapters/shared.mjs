@@ -2,8 +2,10 @@ import { buildRuntimeEnvironment } from "./environment.mjs";
 import {
   findRuntime,
   isModelAllowed,
+  isPermissionArgument,
   isRetiredCommand,
 } from "../ai-template/registry.mjs";
+import { evaluateRoute } from "../enterprise-route-policy.mjs";
 import { loadRepositoryConfig } from "../repository-config.mjs";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -31,6 +33,12 @@ export const REASON_CODES = Object.freeze({
   MODEL_DENIED: "model-denied",
   // An alias-resolving runtime did not report exactly one canonical model during the probe.
   MODEL_UNRESOLVED: "model-unresolved",
+  // Enterprise route attestation (opt-in) did not admit this runtime/model/purpose.
+  ENTERPRISE_DENIED: "enterprise-route-denied",
+  // The CLI reported denied tool calls and the probe task did not complete.
+  PERMISSION_DENIED: "permission-denied",
+  // The permission policy leaves this runtime no role it can run; it is never probed.
+  PERMISSION_UNAVAILABLE: "permission-unavailable",
 });
 
 // Bumped from 30s: CLI authentication / model catalogs
@@ -41,7 +49,8 @@ export const DEFAULT_WORKER_TIMEOUT_MS = 3_600_000;
 // status check), so it gets its own, longer budget.
 export const DEFAULT_HEADLESS_PROBE_TIMEOUT_MS = 120_000;
 
-export const PROBE_SCHEMA_VERSION = 5;
+// 6: permission arguments left the selector; records carry the permission fingerprint.
+export const PROBE_SCHEMA_VERSION = 6;
 
 /** Stderr/stdout patterns that indicate the CLI demanded a real TTY/PTY. */
 const TTY_REQUIRED_PATTERN =
@@ -268,6 +277,8 @@ export async function runHeadlessExecProbe({
         ? { ok: true, reportedModel: reported[0] }
         : { ok: false, reason: REASON_CODES.MODEL_UNRESOLVED };
     }
+    if (reportsPermissionDenials(result))
+      return { ok: false, reason: REASON_CODES.PERMISSION_DENIED };
     if (TTY_REQUIRED_PATTERN.test(combinedOutput))
       return { ok: false, reason: REASON_CODES.TTY_REQUIRED };
     // Exited cleanly but produced no artifact: a print/response-only mode
@@ -296,6 +307,20 @@ export function reportedModels(result) {
     }
   }
   return models;
+}
+
+/** True when a machine-readable result event lists denied tool calls. Reads only the count. */
+export function reportsPermissionDenials(result) {
+  for (const output of [result.stdout, result.stderr])
+    for (const line of String(output ?? "").split(/\r?\n/)) {
+      try {
+        const denials = JSON.parse(line)?.permission_denials;
+        if (Array.isArray(denials) && denials.length > 0) return true;
+      } catch {
+        // not a JSON event
+      }
+    }
+  return false;
 }
 
 /** Verify one exact candidate, isolating failures and exposing closed reasons only. */
@@ -367,6 +392,18 @@ export function selectorTargetsRoute(route, root = process.cwd()) {
   );
 }
 
+/**
+ * True when a selector carries permission-layer arguments. Permission argv is rebuilt
+ * from the registry on every launch, so a selector from a cache, run state or a
+ * hand-written `--route` can never add or loosen permissions.
+ */
+export function selectorHasPermissionArgs(route, root = process.cwd()) {
+  const runtime = findRuntime(route?.agent, root);
+  return splitSelector(route.selector)
+    .slice(1)
+    .some((token) => isPermissionArgument(token, runtime));
+}
+
 /** Retirement is registry data, including executable aliases in cached selectors. */
 export function isRetiredRuntimeRoute(route, root = process.cwd()) {
   if (findRuntime(route?.agent, root)?.retired) return true;
@@ -377,21 +414,29 @@ export function isRetiredRuntimeRoute(route, root = process.cwd()) {
 
 /** A route excluded by the runtime's model allowlist or deny patterns (model or requested value). */
 export function isDisallowedModelRoute(route, root = process.cwd()) {
-  return !isModelAllowed(
-    route?.agent,
-    route?.model,
-    root,
-    route?.requestedModel,
-  );
+  if (!isModelAllowed(route?.agent, route?.model, root, route?.requestedModel))
+    return true;
+  // Enterprise mode (opt-in): the live attestation must also admit the route. Purpose is checked at launch.
+  const runtime = findRuntime(route?.agent, root);
+  return !evaluateRoute(
+    {
+      runtime: runtime?.id,
+      requestedModel: route?.requestedModel ?? route?.model,
+      model: route?.model,
+    },
+    { root },
+  ).allow;
 }
 
 /**
  * @typedef {{ agent: string, model: string, requestedModel?: string, role: string, selector: string,
- *   timeoutMs: number, selectable: boolean, verifiable: boolean }} CapabilityRecord
+ *   timeoutMs: number, selectable: boolean, verifiable: boolean, permissionFingerprint?: string,
+ *   permissionRoles?: string[] }} CapabilityRecord
  */
 /**
  * @param {{ agent: string, model?: string, requestedModel?: string, role: string, selector: string,
- *   timeoutMs?: number, selectable?: boolean, verifiable?: boolean }} fields
+ *   timeoutMs?: number, selectable?: boolean, verifiable?: boolean, permissionFingerprint?: string,
+ *   permissionRoles?: string[] }} fields
  * @returns {CapabilityRecord}
  */
 export function capabilityRecord({
@@ -403,6 +448,8 @@ export function capabilityRecord({
   timeoutMs = DEFAULT_WORKER_TIMEOUT_MS,
   selectable = true,
   verifiable = true,
+  permissionFingerprint,
+  permissionRoles,
 }) {
   const record = {
     agent,
@@ -414,6 +461,11 @@ export function capabilityRecord({
     timeoutMs,
   };
   if (requestedModel !== undefined) record.requestedModel = requestedModel;
+  // Hashes and role names only: the permission argv itself is rebuilt at launch.
+  if (permissionFingerprint !== undefined)
+    record.permissionFingerprint = permissionFingerprint;
+  if (permissionRoles !== undefined)
+    record.permissionRoles = [...permissionRoles];
   return record;
 }
 
