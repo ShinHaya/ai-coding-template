@@ -43,11 +43,15 @@ function repository(t) {
   fs.mkdirSync(path.join(root, "scripts"));
   fs.copyFileSync(script, path.join(root, "scripts/setup-hooks.sh"));
   fs.mkdirSync(path.join(root, ".githooks"));
-  fs.writeFileSync(
-    path.join(root, ".githooks/pre-commit"),
-    "#!/bin/sh\nexit 0\n",
-    { mode: 0o644 },
-  );
+  for (const hook of ["pre-commit", "commit-msg"]) {
+    fs.writeFileSync(
+      path.join(root, ".githooks", hook),
+      "#!/bin/sh\nexit 0\n",
+      {
+        mode: 0o644,
+      },
+    );
+  }
   return {
     root,
     git,
@@ -59,8 +63,8 @@ function repository(t) {
         "--get",
         "core.hooksPath",
       ]).stdout.trim(),
-    hookExecutable: () =>
-      (fs.statSync(path.join(root, ".githooks/pre-commit")).mode & 0o111) !== 0,
+    hookExecutable: (hook = "commit-msg") =>
+      (fs.statSync(path.join(root, ".githooks", hook)).mode & 0o111) !== 0,
   };
 }
 
@@ -69,7 +73,8 @@ test("setup-hooks sets an unset core.hooksPath and is idempotent", (t) => {
   const first = repo.setup();
   assert.equal(first.status, 0, first.stderr);
   assert.equal(repo.localHooksPath(), ".githooks");
-  assert.equal(repo.hookExecutable(), true);
+  assert.equal(repo.hookExecutable("commit-msg"), true);
+  assert.equal(repo.hookExecutable("pre-commit"), true);
 
   const again = repo.setup();
   assert.equal(again.status, 0, again.stderr);
@@ -121,14 +126,14 @@ test("setup-hooks refuses to shadow an inherited global core.hooksPath", (t) => 
   assert.match(after.stdout, /already set to \.githooks/);
 });
 
-test("template pre-commit gates reference existing npm scripts", (t) => {
+test("template commit-msg gates reference existing npm scripts", (t) => {
   const root = path.resolve(path.dirname(script), "..");
   // Consumers own their hooks and package scripts; this is a template contract.
   if (!fs.existsSync(path.join(root, "ai-template.manifest.json"))) {
     t.skip("consumer-owned quality gates");
     return;
   }
-  const hook = fs.readFileSync(path.join(root, ".githooks/pre-commit"), "utf8");
+  const hook = fs.readFileSync(path.join(root, ".githooks/commit-msg"), "utf8");
   const { scripts } = JSON.parse(
     fs.readFileSync(path.join(root, "package.json"), "utf8"),
   );

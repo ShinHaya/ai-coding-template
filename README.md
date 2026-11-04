@@ -18,7 +18,7 @@ them — so a new project starts with the operating model already in place.
 | Issue worktrees                 | `scripts/issue-worktree.sh` — one guarded worktree per Issue, with session leases and handoff epochs                                                                            |
 | Reviewer role and orchestration | `scripts/issue-*.mjs` — verified agent/model route discovery, role dispatch (implementer / planner / reviewer), dependency-ordered multi-Issue plans, optional LangGraph runner |
 | Documentation review            | `skills/{requirements,architecture,design-doc}-review` — review criteria owned by each skill                                                                                    |
-| Commit guards                   | `.githooks/pre-commit` quality gates; a Claude Code `PreToolUse` hook that blocks commits outside an Issue worktree                                                             |
+| Commit guards                   | `.githooks/commit-msg` quality gates; a Claude Code `PreToolUse` hook that blocks commits outside an Issue worktree                                                             |
 | Docs                            | `docs/` — requirements, architecture, development, testing, security, dependency security, GitHub operations                                                                    |
 | CI                              | `shellcheck` for the hook and helper scripts; Dependabot config                                                                                                                 |
 
@@ -35,8 +35,8 @@ After creating a repository from this template:
 5. Optional `.ai-template/config.json` — copy `config/ai-template.example.json`
    for the base branch, quality-gate commands and document paths. Omitted
    commands and locations come from `AGENTS.md`.
-6. `docs/development.md` — commands and quality gates (the `pre-commit` hook
-   runs `npm run format`, `lint`, and `typecheck`; adjust `.githooks/pre-commit`
+6. `docs/development.md` — commands and quality gates (the `commit-msg` hook
+   runs `npm run format`, `lint`, and `typecheck`; adjust `.githooks/commit-msg`
    to the project's real commands)
 
 Then create the `priority:P0`–`priority:P3` labels described in
@@ -83,7 +83,7 @@ after a headless probe verifies them at run time.
 ## Verification
 
 ```bash
-shellcheck .githooks/pre-commit scripts/*.sh .claude/hooks/*.sh
+shellcheck .githooks/commit-msg scripts/*.sh .claude/hooks/*.sh
 bash scripts/test-issue-worktree.sh
 npm run test:orchestrator
 ```

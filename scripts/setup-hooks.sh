@@ -58,7 +58,7 @@ if [ -n "$CURRENT" ] && [ "$CURRENT" != ".githooks" ]; then
 fi
 
 # --- 3. Make hook files executable -------------------------------
-find .githooks -type f \( -name 'pre-commit' -o -name '*.sh' \) \
+find .githooks -type f \( -name 'pre-commit' -o -name 'commit-msg' -o -name '*.sh' \) \
   -exec chmod +x {} +
 
 # --- 4. Point git at the hooks dir -------------------------------
